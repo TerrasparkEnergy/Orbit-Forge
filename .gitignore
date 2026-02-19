@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Textures (download separately)
+frontend/public/textures/*.jpg
+frontend/public/textures/*.png
+!frontend/public/textures/README.md
+
+# Logs
+*.log
+npm-debug.log*

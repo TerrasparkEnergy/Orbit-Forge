@@ -1,0 +1,54 @@
+import { useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
+import { useStore } from '@/stores'
+import { getSatellitePosition } from '@/lib/orbital-mechanics'
+import * as THREE from 'three'
+
+export default function SatelliteMarker() {
+  const groupRef = useRef<THREE.Group>(null)
+  const glowRef = useRef<THREE.Mesh>(null)
+  const phaseRef = useRef(0)
+
+  // Read elements once — re-reads on store change via selector
+  const elements = useStore((s) => s.elements)
+
+  useFrame((_, delta) => {
+    if (!groupRef.current) return
+
+    // Advance satellite along orbit using local ref (no Zustand state update)
+    const speed = 0.02
+    phaseRef.current = (phaseRef.current + speed * delta) % 1
+
+    // Compute position directly without triggering React re-render
+    const trueAnomaly = phaseRef.current * 360
+    const pos = getSatellitePosition({ ...elements, trueAnomaly })
+    groupRef.current.position.set(pos.x, pos.y, pos.z)
+
+    // Pulse the glow
+    if (glowRef.current) {
+      const scale = 1 + 0.2 * Math.sin(Date.now() * 0.003)
+      glowRef.current.scale.setScalar(scale)
+    }
+  })
+
+  return (
+    <group ref={groupRef}>
+      {/* Core satellite dot */}
+      <mesh>
+        <sphereGeometry args={[0.015, 8, 8]} />
+        <meshBasicMaterial color="#F9FAFB" />
+      </mesh>
+
+      {/* Glow */}
+      <mesh ref={glowRef}>
+        <sphereGeometry args={[0.03, 8, 8]} />
+        <meshBasicMaterial
+          color="#3B82F6"
+          transparent
+          opacity={0.4}
+          depthWrite={false}
+        />
+      </mesh>
+    </group>
+  )
+}

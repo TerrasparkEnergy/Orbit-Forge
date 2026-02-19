@@ -1,0 +1,91 @@
+import { create } from 'zustand'
+import { devtools, persist } from 'zustand/middleware'
+import { UISlice, createUISlice } from './ui-slice'
+import { MissionSlice, createMissionSlice } from './mission-slice'
+import { OrbitSlice, createOrbitSlice } from './orbit-slice'
+import { GroundSlice, createGroundSlice } from './ground-slice'
+import { PowerSlice, createPowerSlice } from './power-slice'
+import { ConstellationSlice, createConstellationSlice } from './constellation-slice'
+
+export type AppStore = UISlice & MissionSlice & OrbitSlice & GroundSlice & PowerSlice & ConstellationSlice
+
+export const useStore = create<AppStore>()(
+  devtools(
+    persist(
+      (...a) => ({
+        ...createUISlice(...a),
+        ...createMissionSlice(...a),
+        ...createOrbitSlice(...a),
+        ...createGroundSlice(...a),
+        ...createPowerSlice(...a),
+        ...createConstellationSlice(...a),
+      }),
+      {
+        name: 'orbitforge-autosave',
+        version: 7,
+        migrate: (persisted: any, version: number) => {
+          // Accept all prior versions — just return the persisted state as-is.
+          // Missing keys will be filled in by the slice defaults via merge.
+          return persisted as any
+        },
+        merge: (persisted, current) => {
+          // Deep merge: persisted values override defaults, but missing keys get defaults
+          const merged = { ...current }
+          if (persisted && typeof persisted === 'object') {
+            for (const key of Object.keys(persisted as object)) {
+              const pVal = (persisted as any)[key]
+              const cVal = (current as any)[key]
+              // Deep merge plain objects (mission, walkerParams), shallow merge everything else
+              if (
+                pVal && cVal &&
+                typeof pVal === 'object' && typeof cVal === 'object' &&
+                !Array.isArray(pVal) && !Array.isArray(cVal)
+              ) {
+                (merged as any)[key] = { ...cVal, ...pVal }
+              } else {
+                (merged as any)[key] = pVal
+              }
+            }
+          }
+          return merged
+        },
+        partialize: (state) => ({
+          activeModule: state.activeModule,
+          bottomPanelExpanded: state.bottomPanelExpanded,
+          elements: state.elements,
+          groundStations: state.groundStations,
+          subsystems: state.subsystems,
+          degradationRate: state.degradationRate,
+          walkerParams: state.walkerParams,
+          mission: {
+            ...state.mission,
+            epoch: state.mission.epoch instanceof Date
+              ? state.mission.epoch.toISOString()
+              : state.mission.epoch,
+          },
+        }),
+        onRehydrateStorage: () => (state) => {
+          if (state?.elements) {
+            state.recompute()
+          }
+          if (state?.mission?.epoch) {
+            state.updateMission({
+              epoch: new Date(state.mission.epoch as unknown as string),
+            })
+          }
+          // Sanitize subsystem duty cycles to valid 0-1 range
+          if (state?.subsystems) {
+            for (const sub of state.subsystems) {
+              if (sub.dutyCycle > 1) {
+                state.updateSubsystem(sub.id, { dutyCycle: Math.min(1, sub.dutyCycle / 100) })
+              } else if (sub.dutyCycle < 0) {
+                state.updateSubsystem(sub.id, { dutyCycle: 0 })
+              }
+            }
+          }
+        },
+      }
+    ),
+    { name: 'OrbitForge' }
+  )
+)
