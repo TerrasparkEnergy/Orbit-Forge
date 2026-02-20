@@ -143,6 +143,7 @@ export interface LinkMarginPoint {
   ebN0Db: number
   slantRangeKm: number
   fsplDb: number
+  maxDataRateKbps: number  // max achievable data rate at this elevation
 }
 
 export function computeLinkMarginProfile(
@@ -156,12 +157,28 @@ export function computeLinkMarginProfile(
 
   for (let el = minEl; el <= maxEl; el += step) {
     const result = computeLinkBudget(params, altitudeKm, el)
+
+    // Max achievable data rate: the rate where Eb/N0 exactly equals required Eb/N0
+    // Eb/N0 = C/N = (EIRP - losses + Rx gain) - (k*T*B) where B = data rate
+    // At the limit: available C/N0 = EIRP - losses + RxGain - 10*log10(k*T)
+    // Max data rate = 10^((available_CN0 - required_EbN0) / 10) in bps
+    const frequencyHz = BAND_FREQUENCIES[params.frequencyBand]
+    const distKm = slantRange(altitudeKm, el)
+    const txPowerDbw = 10 * Math.log10(Math.max(params.txPowerW, 1e-30))
+    const eirpDbw = txPowerDbw + params.txAntennaGainDbi
+    const fspl = freeSpacePathLoss(distKm, frequencyHz)
+    const totalLoss = fspl + params.atmosphericLossDb + params.rainLossDb + params.pointingLossDb + params.miscLossDb
+    const cn0Dbhz = eirpDbw - totalLoss + params.rxAntennaGainDbi - 10 * Math.log10(K_BOLTZMANN * params.systemNoiseTempK)
+    const maxBps = Math.pow(10, (cn0Dbhz - params.requiredEbN0Db) / 10)
+    const maxDataRateKbps = maxBps / 1000
+
     points.push({
       elevationDeg: el,
       linkMarginDb: result.linkMarginDb,
       ebN0Db: result.ebN0Db,
       slantRangeKm: result.slantRangeKm,
       fsplDb: result.fsplDb,
+      maxDataRateKbps,
     })
   }
 

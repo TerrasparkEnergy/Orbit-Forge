@@ -22,10 +22,13 @@ export const useStore = create<AppStore>()(
       }),
       {
         name: 'orbitforge-autosave',
-        version: 7,
+        version: 8,
         migrate: (persisted: any, version: number) => {
-          // Accept all prior versions — just return the persisted state as-is.
-          // Missing keys will be filled in by the slice defaults via merge.
+          if (version < 8) {
+            // v8: Reset ground stations to new defaults (4 active stations)
+            const { groundStations, ...rest } = persisted || {}
+            return rest as any
+          }
           return persisted as any
         },
         merge: (persisted, current) => {

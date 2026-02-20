@@ -3,8 +3,8 @@ import type { GroundStation } from '@/types/ground-station'
 export const DEFAULT_GROUND_STATIONS: GroundStation[] = [
   { id: 'svalbard', name: 'Svalbard (SvalSat)', lat: 78.23, lon: 15.39, alt: 0.5, minElevation: 5, active: true },
   { id: 'fairbanks', name: 'Fairbanks, AK', lat: 64.86, lon: -147.72, alt: 0.16, minElevation: 5, active: true },
-  { id: 'darmstadt', name: 'Darmstadt (ESOC)', lat: 49.87, lon: 8.63, alt: 0.14, minElevation: 5, active: false },
-  { id: 'santiago', name: 'Santiago, Chile', lat: -33.45, lon: -70.67, alt: 0.52, minElevation: 5, active: false },
+  { id: 'darmstadt', name: 'Darmstadt (ESOC)', lat: 49.87, lon: 8.63, alt: 0.14, minElevation: 5, active: true },
+  { id: 'santiago', name: 'Santiago, Chile', lat: -33.45, lon: -70.67, alt: 0.52, minElevation: 5, active: true },
   { id: 'goldstone', name: 'Goldstone (DSN)', lat: 35.43, lon: -116.89, alt: 0.99, minElevation: 5, active: false },
   { id: 'canberra', name: 'Canberra (DSN)', lat: -35.40, lon: 148.98, alt: 0.68, minElevation: 5, active: false },
   { id: 'madrid', name: 'Madrid (DSN)', lat: 40.43, lon: -4.25, alt: 0.83, minElevation: 5, active: false },

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import Plot from 'react-plotly.js'
 import { useStore } from '@/stores'
 import { computeLinkMarginProfile, getDefaultLinkParams } from '@/lib/link-budget'
@@ -23,7 +23,7 @@ export default function LinkBudgetChart() {
   const elevations = profile.map((p) => p.elevationDeg)
   const margins = profile.map((p) => p.linkMarginDb)
   const ebN0s = profile.map((p) => p.ebN0Db)
-  const ranges = profile.map((p) => p.slantRangeKm)
+  const dataRates = profile.map((p) => p.maxDataRateKbps)
 
   const darkLayout = {
     paper_bgcolor: 'transparent',
@@ -41,7 +41,7 @@ export default function LinkBudgetChart() {
   return (
     <div className="flex h-full gap-2">
       {/* Left: Link margin + Eb/N0 vs elevation */}
-      <div className="flex-[2] h-full">
+      <div className="flex-1 h-full">
         <Plot
           data={[
             {
@@ -66,7 +66,7 @@ export default function LinkBudgetChart() {
           ]}
           layout={{
             ...darkLayout,
-            title: { text: 'Link Budget vs Elevation', font: { size: 11, color: '#9CA3AF' } },
+            title: { text: 'Link Margin vs Elevation', font: { size: 11, color: '#9CA3AF' } },
             xaxis: {
               title: { text: 'Elevation (\u00B0)', font: { size: 9 } },
               gridcolor: 'rgba(255,255,255,0.05)',
@@ -89,7 +89,6 @@ export default function LinkBudgetChart() {
               color: '#10B981',
             },
             shapes: [
-              // 3 dB margin reference line
               {
                 type: 'line',
                 xref: 'paper',
@@ -108,24 +107,32 @@ export default function LinkBudgetChart() {
         />
       </div>
 
-      {/* Right: Slant range vs elevation */}
+      {/* Right: Achievable data rate vs elevation */}
       <div className="flex-1 h-full">
         <Plot
           data={[
             {
               x: elevations,
-              y: ranges,
+              y: dataRates,
               type: 'scatter',
               mode: 'lines',
-              name: 'Slant Range',
-              line: { color: '#8B5CF6', width: 2 },
+              name: 'Max Data Rate',
+              line: { color: '#F59E0B', width: 2 },
               fill: 'tozeroy',
-              fillcolor: 'rgba(139, 92, 246, 0.1)',
+              fillcolor: 'rgba(245, 158, 11, 0.1)',
+            },
+            {
+              x: elevations,
+              y: elevations.map(() => params.dataRateKbps),
+              type: 'scatter',
+              mode: 'lines',
+              name: `Nominal (${params.dataRateKbps} kbps)`,
+              line: { color: 'rgba(239, 68, 68, 0.6)', width: 1, dash: 'dash' },
             },
           ]}
           layout={{
             ...darkLayout,
-            title: { text: 'Slant Range', font: { size: 11, color: '#9CA3AF' } },
+            title: { text: 'Achievable Data Rate', font: { size: 11, color: '#9CA3AF' } },
             xaxis: {
               title: { text: 'Elevation (\u00B0)', font: { size: 9 } },
               gridcolor: 'rgba(255,255,255,0.05)',
@@ -133,11 +140,11 @@ export default function LinkBudgetChart() {
               range: [5, 90],
             },
             yaxis: {
-              title: { text: 'Range (km)', font: { size: 9 } },
+              title: { text: 'Data Rate (kbps)', font: { size: 9 } },
               gridcolor: 'rgba(255,255,255,0.05)',
-              color: '#8B5CF6',
+              color: '#F59E0B',
+              type: 'log',
             },
-            showlegend: false,
           }}
           config={{ displayModeBar: false, responsive: true }}
           style={{ width: '100%', height: '100%' }}

@@ -7,6 +7,10 @@ const STEFAN_BOLTZMANN = 5.670374419e-8  // W/(m^2 K^4)
 const EARTH_IR = 240                      // W/m^2 (Earth infrared emission)
 const EARTH_ALBEDO = 0.3                  // Average Earth albedo factor
 
+// Radiation efficiency: not all surface area radiates freely
+// (solar panels, components, mounting hardware block radiation)
+const RADIATION_EFFICIENCY = 0.65
+
 // ─── Surface Material Presets ───
 
 export interface SurfaceMaterial {
@@ -53,25 +57,28 @@ export function cubeSatSurfaceArea(size: CubeSatSize): number {
 }
 
 /**
- * Sun-facing area (projected cross-section) for a CubeSat
+ * Sun-facing area (projected cross-section) for a CubeSat.
+ * Uses the largest face (long face) since the sun typically illuminates
+ * a long side for nadir-pointing spacecraft.
  */
 export function cubeSatSunFacingArea(size: CubeSatSize): number {
   const areas: Record<CubeSatSize, number> = {
-    '1U': 0.01,       // 10x10 cm
-    '1.5U': 0.01,
-    '2U': 0.01,
-    '3U': 0.01,       // 10x10 cm face
-    '6U': 0.02,       // 20x10 cm face
-    '12U': 0.04,      // 20x20 cm face
+    '1U': 0.01,       // 10x10 cm (cube, all faces equal)
+    '1.5U': 0.015,    // 10x15 cm long face
+    '2U': 0.02,       // 10x20 cm long face
+    '3U': 0.03,       // 10x30 cm long face
+    '6U': 0.06,       // 20x30 cm long face
+    '12U': 0.06,      // 20x30 cm face
   }
   return areas[size] || areas['3U']
 }
 
 /**
- * Earth-facing area (nadir face)
+ * Earth-facing area — Earth subtends a large angle at LEO so it
+ * illuminates roughly the same effective area as the sun-facing side.
  */
 export function cubeSatEarthFacingArea(size: CubeSatSize): number {
-  return cubeSatSunFacingArea(size) // Same projected area
+  return cubeSatSunFacingArea(size)
 }
 
 // ─── Thermal Computations ───
@@ -123,8 +130,10 @@ export function computeSteadyStateTemp(
   // Total absorbed power
   const totalAbsorbedW = solarFluxW + earthIrFluxW + albedoFluxW + internalFluxW
 
-  // Equilibrium temperature: T = (Q / (epsilon * sigma * A))^(1/4)
-  const effectiveRadiatingArea = material.emissivity * STEFAN_BOLTZMANN * totalSurfaceArea
+  // Equilibrium temperature: T = (Q / (epsilon * sigma * A_eff))^(1/4)
+  // Apply radiation efficiency to account for panels/components blocking radiation
+  const effectiveRadArea = totalSurfaceArea * RADIATION_EFFICIENCY
+  const effectiveRadiatingArea = material.emissivity * STEFAN_BOLTZMANN * effectiveRadArea
   const temperatureK = effectiveRadiatingArea > 0
     ? Math.pow(totalAbsorbedW / effectiveRadiatingArea, 0.25)
     : 0
@@ -186,48 +195,57 @@ export function computeThermalProfile(
   const eclipseStart = 180 - eclipseHalfAngle
   const eclipseEnd = 180 + eclipseHalfAngle
 
+  // Effective radiating area (accounting for panels/components)
+  const effectiveRadArea = totalArea * RADIATION_EFFICIENCY
+  const viewFactor = computeEarthViewFactor(altitudeKm)
+
   // Start with hot-case steady state temperature
   const hotCase = computeSteadyStateTemp(material, altitudeKm, true, internalPowerW, sunArea, earthArea, totalArea)
   let currentTempK = hotCase.temperatureK
 
+  // Run 5 orbits to reach periodic steady state, only keep the last orbit
+  const totalOrbits = 5
   const points: ThermalProfilePoint[] = []
 
-  for (let i = 0; i < steps; i++) {
-    const posDeg = (i / steps) * 360
-    const timeMin = (i / steps) * periodMin
-    const inSunlight = posDeg < eclipseStart || posDeg > eclipseEnd
+  for (let orbit = 0; orbit < totalOrbits; orbit++) {
+    for (let i = 0; i < steps; i++) {
+      const posDeg = (i / steps) * 360
+      const timeMin = (i / steps) * periodMin
+      const inSunlight = posDeg < eclipseStart || posDeg > eclipseEnd
 
-    const viewFactor = computeEarthViewFactor(altitudeKm)
+      // Heat inputs
+      const solarFluxW = inSunlight ? material.absorptivity * SOLAR_FLUX * sunArea : 0
+      const earthIrFluxW = material.emissivity * EARTH_IR * viewFactor * earthArea
+      const albedoFluxW = inSunlight ? material.absorptivity * SOLAR_FLUX * EARTH_ALBEDO * viewFactor * earthArea : 0
+      const totalInputW = solarFluxW + earthIrFluxW + albedoFluxW + internalPowerW
 
-    // Heat inputs
-    const solarFluxW = inSunlight ? material.absorptivity * SOLAR_FLUX * sunArea : 0
-    const earthIrFluxW = material.emissivity * EARTH_IR * viewFactor * earthArea
-    const albedoFluxW = inSunlight ? material.absorptivity * SOLAR_FLUX * EARTH_ALBEDO * viewFactor * earthArea : 0
-    const totalInputW = solarFluxW + earthIrFluxW + albedoFluxW + internalPowerW
+      // Radiative cooling (uses effective radiating area)
+      const radiatedW = material.emissivity * STEFAN_BOLTZMANN * effectiveRadArea * Math.pow(currentTempK, 4)
 
-    // Radiative cooling
-    const radiatedW = material.emissivity * STEFAN_BOLTZMANN * totalArea * Math.pow(currentTempK, 4)
+      // Net heat flow
+      const netPowerW = totalInputW - radiatedW
 
-    // Net heat flow
-    const netPowerW = totalInputW - radiatedW
+      // Update temperature: dT = Q * dt / C
+      if (thermalMass > 0) {
+        currentTempK += (netPowerW * dt) / thermalMass
+      }
 
-    // Update temperature: dT = Q * dt / C
-    if (thermalMass > 0) {
-      currentTempK += (netPowerW * dt) / thermalMass
+      // Clamp to physical bounds
+      currentTempK = Math.max(3, currentTempK)
+
+      // Only record points from the last orbit
+      if (orbit === totalOrbits - 1) {
+        points.push({
+          positionDeg: posDeg,
+          timeMin,
+          temperatureC: currentTempK - 273.15,
+          inSunlight,
+          solarFluxW,
+          earthIrFluxW,
+          albedoFluxW,
+        })
+      }
     }
-
-    // Clamp to physical bounds
-    currentTempK = Math.max(3, currentTempK) // Can't go below ~3K
-
-    points.push({
-      positionDeg: posDeg,
-      timeMin,
-      temperatureC: currentTempK - 273.15,
-      inSunlight,
-      solarFluxW,
-      earthIrFluxW,
-      albedoFluxW,
-    })
   }
 
   return points
@@ -253,11 +271,13 @@ export function computeThermalSummary(
   const sunArea = cubeSatSunFacingArea(size)
   const earthArea = cubeSatEarthFacingArea(size)
   const totalArea = cubeSatSurfaceArea(size)
+  // Summary uses the same effective radiating area as the detailed model
+  const effectiveRadArea = totalArea * RADIATION_EFFICIENCY
 
   // Hot case: full sunlight
-  const hotCase = computeSteadyStateTemp(material, altitudeKm, true, internalPowerW, sunArea, earthArea, totalArea)
-  // Cold case: eclipse
-  const coldCase = computeSteadyStateTemp(material, altitudeKm, false, internalPowerW * 0.5, sunArea, earthArea, totalArea)
+  const hotCase = computeSteadyStateTemp(material, altitudeKm, true, internalPowerW, sunArea, earthArea, effectiveRadArea)
+  // Cold case: eclipse with reduced internal power
+  const coldCase = computeSteadyStateTemp(material, altitudeKm, false, internalPowerW * 0.3, sunArea, earthArea, effectiveRadArea)
 
   const hotCaseStatus: ThermalSummary['hotCaseStatus'] =
     hotCase.temperatureC > 60 ? 'critical' :
