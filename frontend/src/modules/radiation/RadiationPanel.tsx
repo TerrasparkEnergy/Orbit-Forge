@@ -38,8 +38,7 @@ export default function RadiationPanel() {
                 type="number"
                 value={shieldingMm}
                 onChange={(e) => setShielding(parseFloat(e.target.value) || 0)}
-                className="input-field w-16 text-xs text-center"
-                step="0.5"
+                className="input-field w-24 text-sm font-mono"
                 min="0"
                 max="20"
               />

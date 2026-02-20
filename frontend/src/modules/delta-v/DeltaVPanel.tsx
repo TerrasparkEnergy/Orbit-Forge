@@ -51,8 +51,7 @@ export default function DeltaVPanel() {
                     type="number"
                     value={propulsion.specificImpulse}
                     onChange={(e) => updatePropulsion({ specificImpulse: Math.max(1, parseFloat(e.target.value) || 0) })}
-                    className="input-field w-16 text-xs text-center"
-                    step="10"
+                    className="input-field w-24 text-sm font-mono"
                     min="1"
                   />
                   <span className="text-[11px] text-[var(--text-secondary)] font-mono w-6">s</span>
@@ -66,8 +65,7 @@ export default function DeltaVPanel() {
                     type="number"
                     value={propulsion.propellantMass}
                     onChange={(e) => updatePropulsion({ propellantMass: Math.max(0, parseFloat(e.target.value) || 0) })}
-                    className="input-field w-16 text-xs text-center"
-                    step="0.01"
+                    className="input-field w-24 text-sm font-mono"
                     min="0"
                   />
                   <span className="text-[11px] text-[var(--text-secondary)] font-mono w-6">kg</span>
@@ -85,18 +83,17 @@ export default function DeltaVPanel() {
               <div key={m.id} className="flex items-center gap-1.5 group">
                 <div className="flex-1 min-w-0">
                   <div className="text-[10px] text-[var(--text-secondary)] truncate">{m.name}</div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5">
                     <input
                       type="number"
                       value={m.deltaV}
                       onChange={(e) => updateManeuver(m.id, { deltaV: Math.max(0, parseFloat(e.target.value) || 0) })}
-                      className="input-field w-14 text-[10px] text-center"
-                      step="1"
+                      className="input-field w-20 text-sm font-mono"
                       min="0"
                       disabled={m.id === 'deorbit'}
                     />
-                    <span className="text-[9px] text-[var(--text-tertiary)] font-mono">m/s</span>
-                    {m.perYear && <span className="text-[9px] text-accent-amber font-mono">/yr</span>}
+                    <span className="text-[11px] text-[var(--text-secondary)] font-mono">m/s</span>
+                    {m.perYear && <span className="text-[11px] text-accent-amber font-mono">/yr</span>}
                   </div>
                 </div>
                 {!DEFAULT_MANEUVERS.find((d) => d.id === m.id) && (
