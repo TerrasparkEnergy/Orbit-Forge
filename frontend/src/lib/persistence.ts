@@ -1,5 +1,5 @@
 const STORAGE_PREFIX = 'orbitforge-project-'
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 
 interface SavedProject {
   version: number
@@ -12,6 +12,10 @@ interface SavedProject {
     subsystems?: any
     degradationRate?: number
     walkerParams?: any
+    propulsion?: any
+    maneuvers?: any
+    shieldingThicknessMm?: number
+    scenarios?: any[]
   }
 }
 
@@ -28,6 +32,10 @@ function serializeMissionState(state: any): SavedProject['data'] {
     subsystems: state.subsystems,
     degradationRate: state.degradationRate,
     walkerParams: state.walkerParams,
+    propulsion: state.propulsion,
+    maneuvers: state.maneuvers,
+    shieldingThicknessMm: state.shieldingThicknessMm,
+    scenarios: state.scenarios,
   }
 }
 

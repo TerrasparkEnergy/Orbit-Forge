@@ -1,6 +1,6 @@
 import { useStore } from '@/stores'
 import { CUBESAT_SIZES, SOLAR_EFFICIENCIES, ANTENNA_GAINS } from '@/types/mission'
-import type { CubeSatSize, SolarPanelConfig, AntennaType, FrequencyBand, MissionType } from '@/types/mission'
+import type { CubeSatSize, SolarPanelConfig, AntennaType, FrequencyBand, MissionType, PointingMode } from '@/types/mission'
 import SectionHeader from '@/components/ui/SectionHeader'
 
 function SelectField({ label, value, onChange, options }: {
@@ -132,6 +132,17 @@ export default function MissionConfigPanel() {
           value={String(sc.solarCellEfficiency)}
           onChange={(v) => updateSpacecraft({ solarCellEfficiency: parseFloat(v) })}
           options={SOLAR_EFFICIENCIES.map((e) => ({ label: `${e.label} (${(e.value * 100).toFixed(0)}%)`, value: String(e.value) }))}
+        />
+
+        <SelectField
+          label="Pointing Mode"
+          value={sc.pointingMode || 'nadir-pointing'}
+          onChange={(v) => updateSpacecraft({ pointingMode: v as PointingMode })}
+          options={[
+            { label: 'Nadir-Pointing', value: 'nadir-pointing' },
+            { label: 'Sun-Pointing', value: 'sun-pointing' },
+            { label: 'Tumbling', value: 'tumbling' },
+          ]}
         />
       </SectionHeader>
 

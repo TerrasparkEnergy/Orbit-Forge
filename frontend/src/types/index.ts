@@ -5,6 +5,9 @@ export enum ModuleId {
   GroundPasses = 'ground-passes',
   OrbitalLifetime = 'orbital-lifetime',
   Constellation = 'constellation',
+  DeltaV = 'delta-v',
+  Radiation = 'radiation',
+  Comparison = 'comparison',
 }
 
 export const MODULE_LABELS: Record<ModuleId, string> = {
@@ -14,6 +17,9 @@ export const MODULE_LABELS: Record<ModuleId, string> = {
   [ModuleId.GroundPasses]: 'Passes',
   [ModuleId.OrbitalLifetime]: 'Lifetime',
   [ModuleId.Constellation]: 'Constellation',
+  [ModuleId.DeltaV]: '\u0394V Budget',
+  [ModuleId.Radiation]: 'Radiation',
+  [ModuleId.Comparison]: 'Compare',
 }
 
 export const MODULE_NUMBERS: Record<ModuleId, number> = {
@@ -23,6 +29,9 @@ export const MODULE_NUMBERS: Record<ModuleId, number> = {
   [ModuleId.GroundPasses]: 4,
   [ModuleId.OrbitalLifetime]: 5,
   [ModuleId.Constellation]: 6,
+  [ModuleId.DeltaV]: 7,
+  [ModuleId.Radiation]: 8,
+  [ModuleId.Comparison]: 9,
 }
 
 export interface Vec3 {

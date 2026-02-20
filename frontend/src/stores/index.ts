@@ -6,8 +6,11 @@ import { OrbitSlice, createOrbitSlice } from './orbit-slice'
 import { GroundSlice, createGroundSlice } from './ground-slice'
 import { PowerSlice, createPowerSlice } from './power-slice'
 import { ConstellationSlice, createConstellationSlice } from './constellation-slice'
+import { DeltaVSlice, createDeltaVSlice } from './deltav-slice'
+import { RadiationSlice, createRadiationSlice } from './radiation-slice'
+import { ComparisonSlice, createComparisonSlice } from './comparison-slice'
 
-export type AppStore = UISlice & MissionSlice & OrbitSlice & GroundSlice & PowerSlice & ConstellationSlice
+export type AppStore = UISlice & MissionSlice & OrbitSlice & GroundSlice & PowerSlice & ConstellationSlice & DeltaVSlice & RadiationSlice & ComparisonSlice
 
 export const useStore = create<AppStore>()(
   devtools(
@@ -19,20 +22,19 @@ export const useStore = create<AppStore>()(
         ...createGroundSlice(...a),
         ...createPowerSlice(...a),
         ...createConstellationSlice(...a),
+        ...createDeltaVSlice(...a),
+        ...createRadiationSlice(...a),
+        ...createComparisonSlice(...a),
       }),
       {
         name: 'orbitforge-autosave',
-        version: 9,
+        version: 10,
         migrate: (persisted: any, version: number) => {
           if (version < 8) {
-            // v8: Reset ground stations to new defaults (4 active stations)
             const { groundStations, ...rest } = persisted || {}
             persisted = rest
           }
           if (version < 9) {
-            // v9: Add syncWithOrbit to walkerParams
-            // If user had custom walker params, preserve them (syncWithOrbit: false)
-            // Otherwise default to syncing with orbit tab
             if (persisted?.walkerParams) {
               persisted = {
                 ...persisted,
@@ -40,16 +42,26 @@ export const useStore = create<AppStore>()(
               }
             }
           }
+          // v10: Add pointingMode to spacecraft config if missing
+          if (version < 10) {
+            if (persisted?.mission?.spacecraft && !persisted.mission.spacecraft.pointingMode) {
+              persisted = {
+                ...persisted,
+                mission: {
+                  ...persisted.mission,
+                  spacecraft: { ...persisted.mission.spacecraft, pointingMode: 'nadir-pointing' },
+                },
+              }
+            }
+          }
           return persisted as any
         },
         merge: (persisted, current) => {
-          // Deep merge: persisted values override defaults, but missing keys get defaults
           const merged = { ...current }
           if (persisted && typeof persisted === 'object') {
             for (const key of Object.keys(persisted as object)) {
               const pVal = (persisted as any)[key]
               const cVal = (current as any)[key]
-              // Deep merge plain objects (mission, walkerParams), shallow merge everything else
               if (
                 pVal && cVal &&
                 typeof pVal === 'object' && typeof cVal === 'object' &&
@@ -71,6 +83,10 @@ export const useStore = create<AppStore>()(
           subsystems: state.subsystems,
           degradationRate: state.degradationRate,
           walkerParams: state.walkerParams,
+          propulsion: state.propulsion,
+          maneuvers: state.maneuvers,
+          shieldingThicknessMm: state.shieldingThicknessMm,
+          scenarios: state.scenarios,
           mission: {
             ...state.mission,
             epoch: state.mission.epoch instanceof Date
@@ -87,7 +103,6 @@ export const useStore = create<AppStore>()(
               epoch: new Date(state.mission.epoch as unknown as string),
             })
           }
-          // Sanitize subsystem duty cycles to valid 0-1 range
           if (state?.subsystems) {
             for (const sub of state.subsystems) {
               if (sub.dutyCycle > 1) {

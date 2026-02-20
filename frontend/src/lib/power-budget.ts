@@ -45,14 +45,19 @@ export function totalAvgPowerDraw(subsystems: PowerSubsystem[]): number {
  */
 export function computeSolarPowerPeak(spacecraft: SpacecraftConfig): number {
   // P = solar_flux * panel_area * efficiency * cos(average_incidence)
-  // Average incidence factor for body-mounted is ~0.5 (random tumbling),
-  // 1-axis deployable ~0.7, 2-axis tracking ~0.9
-  const incidenceFactors: Record<string, number> = {
-    'body-mounted': 0.5,
-    '1-axis-deployable': 0.7,
-    '2-axis-deployable': 0.9,
+  // Incidence factor depends on both panel config and pointing mode:
+  // - Body-mounted tumbling: only ~25% effective (random orientation)
+  // - Body-mounted nadir: ~30% (one long face illuminated at varying angles)
+  // - Body-mounted sun-pointing: ~50% (best face toward sun)
+  // - Deployable panels are less affected by pointing mode
+  const incidenceFactors: Record<string, Record<string, number>> = {
+    'body-mounted':       { 'tumbling': 0.25, 'nadir-pointing': 0.30, 'sun-pointing': 0.50 },
+    '1-axis-deployable':  { 'tumbling': 0.40, 'nadir-pointing': 0.55, 'sun-pointing': 0.70 },
+    '2-axis-deployable':  { 'tumbling': 0.50, 'nadir-pointing': 0.70, 'sun-pointing': 0.90 },
   }
-  const factor = incidenceFactors[spacecraft.solarPanelConfig] ?? 0.5
+  const pointingMode = spacecraft.pointingMode || 'nadir-pointing'
+  const configFactors = incidenceFactors[spacecraft.solarPanelConfig] || incidenceFactors['body-mounted']
+  const factor = configFactors[pointingMode] || 0.30
   return SOLAR_FLUX * spacecraft.solarPanelArea * spacecraft.solarCellEfficiency * factor
 }
 

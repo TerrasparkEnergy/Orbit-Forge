@@ -23,6 +23,15 @@ import DecayCurveChart from '@/modules/orbital-lifetime/DecayCurveChart'
 import ConstellationPanel from '@/modules/constellation/ConstellationPanel'
 import ConstellationDisplay from '@/modules/constellation/ConstellationDisplay'
 import ConstellationChart from '@/modules/constellation/ConstellationChart'
+import DeltaVPanel from '@/modules/delta-v/DeltaVPanel'
+import DeltaVDisplay from '@/modules/delta-v/DeltaVDisplay'
+import DeltaVChart from '@/modules/delta-v/DeltaVChart'
+import RadiationPanel from '@/modules/radiation/RadiationPanel'
+import RadiationDisplay from '@/modules/radiation/RadiationDisplay'
+import RadiationChart from '@/modules/radiation/RadiationChart'
+import ComparisonPanel from '@/modules/comparison/ComparisonPanel'
+import ComparisonDisplay from '@/modules/comparison/ComparisonDisplay'
+import ComparisonChart from '@/modules/comparison/ComparisonChart'
 import SaveLoadDialog from '@/components/ui/SaveLoadDialog'
 
 function LeftPanelContent() {
@@ -46,6 +55,12 @@ function LeftPanelContent() {
       return <LifetimeConfigPanel />
     case ModuleId.Constellation:
       return <ConstellationPanel />
+    case ModuleId.DeltaV:
+      return <DeltaVPanel />
+    case ModuleId.Radiation:
+      return <RadiationPanel />
+    case ModuleId.Comparison:
+      return <ComparisonPanel />
     default:
       return null
   }
@@ -66,6 +81,12 @@ function RightPanelContent() {
       return <LifetimeDisplay />
     case ModuleId.Constellation:
       return <ConstellationDisplay />
+    case ModuleId.DeltaV:
+      return <DeltaVDisplay />
+    case ModuleId.Radiation:
+      return <RadiationDisplay />
+    case ModuleId.Comparison:
+      return <ComparisonDisplay />
     default:
       return null
   }
@@ -86,6 +107,12 @@ function BottomPanelContent() {
       return <DecayCurveChart />
     case ModuleId.Constellation:
       return <ConstellationChart />
+    case ModuleId.DeltaV:
+      return <DeltaVChart />
+    case ModuleId.Radiation:
+      return <RadiationChart />
+    case ModuleId.Comparison:
+      return <ComparisonChart />
     default:
       return null
   }

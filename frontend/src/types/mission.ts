@@ -20,6 +20,7 @@ export type SolarPanelConfig = 'body-mounted' | '1-axis-deployable' | '2-axis-de
 export type AntennaType = 'dipole' | 'patch' | 'helical' | 'parabolic'
 export type FrequencyBand = 'UHF' | 'S-band' | 'X-band' | 'Ka-band'
 export type MissionType = 'earth-observation' | 'communications' | 'technology-demo' | 'science' | 'iot-m2m'
+export type PointingMode = 'tumbling' | 'nadir-pointing' | 'sun-pointing'
 
 export const ANTENNA_GAINS: Record<AntennaType, number> = {
   dipole: 2.15,
@@ -40,6 +41,7 @@ export interface SpacecraftConfig {
   solarPanelConfig: SolarPanelConfig
   solarPanelArea: number     // m^2
   solarCellEfficiency: number // 0-1
+  pointingMode: PointingMode  // affects solar power incidence angle
   batteryCapacity: number    // Wh
   powerIdle: number          // W
   powerPeak: number          // W
@@ -65,6 +67,7 @@ export const DEFAULT_SPACECRAFT: SpacecraftConfig = {
   solarPanelConfig: 'body-mounted',
   solarPanelArea: 0.07,
   solarCellEfficiency: 0.28,
+  pointingMode: 'nadir-pointing',
   batteryCapacity: 40,
   powerIdle: 0.5,
   powerPeak: 5,

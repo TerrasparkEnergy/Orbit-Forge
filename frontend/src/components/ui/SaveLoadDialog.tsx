@@ -41,6 +41,18 @@ function restoreProjectData(data: any) {
   if (data.walkerParams) {
     state.setWalkerParams(data.walkerParams)
   }
+  if (data.propulsion) {
+    state.setPropulsion(data.propulsion)
+  }
+  if (data.maneuvers) {
+    state.setManeuvers(data.maneuvers)
+  }
+  if (data.shieldingThicknessMm !== undefined) {
+    state.setShieldingThickness(data.shieldingThicknessMm)
+  }
+  if (data.scenarios) {
+    state.setScenarios(data.scenarios)
+  }
 }
 
 export default function SaveLoadDialog({ open, onClose }: SaveLoadDialogProps) {

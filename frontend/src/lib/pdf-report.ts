@@ -3,6 +3,8 @@ import { computePowerAnalysis, totalAvgPowerDraw, subsystemAvgPower } from './po
 import { predictPasses, computePassMetrics } from './pass-prediction'
 import { estimateLifetime, checkCompliance, computeBallisticCoefficient, estimateCrossSection } from './orbital-lifetime'
 import { computeConstellationMetrics } from './constellation'
+import { computeDeltaVBudget, tsiolkovskyDeltaV } from './delta-v'
+import { computeRadiationEnvironment } from './radiation'
 import { R_EARTH_EQUATORIAL } from './constants'
 
 interface ReportState {
@@ -12,6 +14,9 @@ interface ReportState {
   subsystems: any[]
   degradationRate: number
   walkerParams: any
+  propulsion?: any
+  maneuvers?: any
+  shieldingThicknessMm?: number
 }
 
 export async function generateMissionReport(state: ReportState): Promise<void> {
@@ -319,6 +324,55 @@ export async function generateMissionReport(state: ReportState): Promise<void> {
     addKeyValue('Orbital Period', `${constellationMetrics.orbitalPeriodMin.toFixed(1)} min`)
     addKeyValue('Coverage Band', `${constellationMetrics.coverageLatBand.min.toFixed(0)}\u00B0 to ${constellationMetrics.coverageLatBand.max.toFixed(0)}\u00B0`)
   }
+
+  // ─── Section 8: Delta-V Budget ───
+  if (state.propulsion && state.propulsion.type !== 'none') {
+    addSectionTitle('Delta-V Budget')
+
+    const dvManeuvers = state.maneuvers || []
+    const dvBudget = computeDeltaVBudget(
+      state.propulsion,
+      dvManeuvers,
+      mission.spacecraft.mass,
+      avgAlt,
+      mission.lifetimeTarget,
+      bStar,
+    )
+
+    addKeyValue('Propulsion Type', state.propulsion.type)
+    addKeyValue('Specific Impulse', `${state.propulsion.specificImpulse} s`)
+    addKeyValue('Propellant Mass', `${state.propulsion.propellantMass} kg`)
+    addKeyValue('Dry Mass', `${mission.spacecraft.mass} kg`)
+    addKeyValue('Wet Mass', `${(mission.spacecraft.mass + state.propulsion.propellantMass).toFixed(2)} kg`)
+    addKeyValue('Mass Ratio', dvBudget.massRatio.toFixed(3))
+    addKeyValue('Available ΔV', `${dvBudget.availableDeltaV.toFixed(1)} m/s`)
+    addKeyValue('Required ΔV', `${dvBudget.totalRequiredDeltaV.toFixed(1)} m/s`)
+    addKeyValue('ΔV Margin', `${dvBudget.marginDeltaV.toFixed(1)} m/s (${(dvBudget.marginPercent * 100).toFixed(1)}%) — ${dvBudget.marginStatus}`)
+
+    addTable(
+      ['Maneuver', 'ΔV (m/s)', 'Propellant (kg)'],
+      dvBudget.maneuverBreakdown.map((m) => [
+        m.name,
+        m.deltaV.toFixed(1),
+        m.propellantKg.toFixed(4),
+      ])
+    )
+  }
+
+  // ─── Section 9: Radiation Environment ───
+  const shieldingMm = state.shieldingThicknessMm ?? 1
+  const rad = computeRadiationEnvironment(avgAlt, elements.inclination, shieldingMm, mission.lifetimeTarget)
+
+  addSectionTitle('Radiation Environment')
+  addKeyValue('Altitude', `${avgAlt.toFixed(0)} km`)
+  addKeyValue('Inclination', `${elements.inclination.toFixed(1)}°`)
+  addKeyValue('Al Shielding', `${shieldingMm} mm`)
+  addKeyValue('Belt Region', rad.beltRegion)
+  addKeyValue('SAA Exposure', rad.saaExposure)
+  addKeyValue('Unshielded Dose', `${rad.unshieldedDoseKradPerYear.toFixed(2)} krad/yr`)
+  addKeyValue('Shielded Dose', `${rad.shieldedDoseKradPerYear.toFixed(2)} krad/yr`)
+  addKeyValue('Mission Total Dose', `${rad.missionTotalDoseKrad.toFixed(2)} krad`)
+  addKeyValue('Component Guidance', `${rad.componentRecommendation} (${rad.componentStatus})`)
 
   // Add footer to last page
   addFooter()
