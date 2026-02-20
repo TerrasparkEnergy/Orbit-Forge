@@ -7,7 +7,15 @@ import { MU_EARTH_KM, R_EARTH_EQUATORIAL } from '@/lib/constants'
 import { dateToGMST } from '@/lib/time-utils'
 
 export default function ConstellationChart() {
-  const params = useStore((s) => s.walkerParams)
+  const storeParams = useStore((s) => s.walkerParams)
+  const elements = useStore((s) => s.elements)
+
+  const params = useMemo(() => {
+    if (storeParams.syncWithOrbit) {
+      return { ...storeParams, altitude: Math.round(elements.semiMajorAxis - R_EARTH_EQUATORIAL), inclination: elements.inclination }
+    }
+    return storeParams
+  }, [storeParams, elements.semiMajorAxis, elements.inclination])
 
   const sats = useMemo(() => generateWalkerConstellation(params), [params])
 

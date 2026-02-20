@@ -154,8 +154,11 @@ export async function generateMissionReport(state: ReportState): Promise<void> {
   const lifetimeDays = estimateLifetime(avgAlt, bStar, 'moderate')
   const compliance = checkCompliance(avgAlt, bStar, 'moderate')
 
-  // Constellation
-  const constellationMetrics = computeConstellationMetrics(walkerParams, mission.spacecraft.mass)
+  // Constellation — use orbit tab values when synced
+  const effectiveWalkerParams = walkerParams.syncWithOrbit
+    ? { ...walkerParams, altitude: Math.round(avgAlt), inclination: elements.inclination }
+    : walkerParams
+  const constellationMetrics = computeConstellationMetrics(effectiveWalkerParams, mission.spacecraft.mass)
 
   // ─── Build PDF ───
 
@@ -304,12 +307,12 @@ export async function generateMissionReport(state: ReportState): Promise<void> {
   }
 
   // ─── Section 7: Constellation ───
-  if (walkerParams && walkerParams.totalSats > 1) {
+  if (effectiveWalkerParams && effectiveWalkerParams.totalSats > 1) {
     addSectionTitle('Constellation Design')
 
-    addKeyValue('Pattern', `Walker ${walkerParams.type === 'delta' ? 'Delta' : 'Star'} ${walkerParams.totalSats}/${walkerParams.planes}/${walkerParams.phasing}`)
-    addKeyValue('Altitude', `${walkerParams.altitude} km`)
-    addKeyValue('Inclination', `${walkerParams.inclination}\u00B0`)
+    addKeyValue('Pattern', `Walker ${effectiveWalkerParams.type === 'delta' ? 'Delta' : 'Star'} ${effectiveWalkerParams.totalSats}/${effectiveWalkerParams.planes}/${effectiveWalkerParams.phasing}`)
+    addKeyValue('Altitude', `${effectiveWalkerParams.altitude} km`)
+    addKeyValue('Inclination', `${effectiveWalkerParams.inclination}\u00B0`)
     addKeyValue('Total Satellites', `${constellationMetrics.totalSatellites}`)
     addKeyValue('Sats/Plane', `${constellationMetrics.satsPerPlane}`)
     addKeyValue('Total Mass', `${constellationMetrics.totalMass.toFixed(0)} kg`)

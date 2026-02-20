@@ -21,6 +21,7 @@ export interface WalkerParams {
   altitude: number     // km above surface
   inclination: number  // degrees
   raan0: number        // RAAN of first plane (degrees)
+  syncWithOrbit: boolean // When true, altitude & inclination inherit from orbit tab
 }
 
 export const DEFAULT_WALKER: WalkerParams = {
@@ -31,6 +32,7 @@ export const DEFAULT_WALKER: WalkerParams = {
   altitude: 550,
   inclination: 53,
   raan0: 0,
+  syncWithOrbit: true,
 }
 
 /**

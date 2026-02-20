@@ -3,10 +3,19 @@ import { useStore } from '@/stores'
 import DataReadout from '@/components/ui/DataReadout'
 import SectionHeader from '@/components/ui/SectionHeader'
 import { computeConstellationMetrics } from '@/lib/constellation'
+import { R_EARTH_EQUATORIAL } from '@/lib/constants'
 
 export default function ConstellationDisplay() {
   const mission = useStore((s) => s.mission)
-  const params = useStore((s) => s.walkerParams)
+  const storeParams = useStore((s) => s.walkerParams)
+  const elements = useStore((s) => s.elements)
+
+  const params = useMemo(() => {
+    if (storeParams.syncWithOrbit) {
+      return { ...storeParams, altitude: Math.round(elements.semiMajorAxis - R_EARTH_EQUATORIAL), inclination: elements.inclination }
+    }
+    return storeParams
+  }, [storeParams, elements.semiMajorAxis, elements.inclination])
 
   const metrics = useMemo(
     () => computeConstellationMetrics(params, mission.spacecraft.mass),

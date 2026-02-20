@@ -11,25 +11,38 @@ import {
   type WalkerParams,
   type WalkerType,
 } from '@/lib/constellation'
+import { R_EARTH_EQUATORIAL } from '@/lib/constants'
 import { exportCSV } from '@/lib/csv-export'
 
 export default function ConstellationPanel() {
   const mission = useStore((s) => s.mission)
+  const elements = useStore((s) => s.elements)
   const params = useStore((s) => s.walkerParams)
   const updateWalkerParams = useStore((s) => s.updateWalkerParams)
   const setWalkerParams = useStore((s) => s.setWalkerParams)
 
+  // When synced with orbit tab, use orbit tab's altitude and inclination
+  const orbitAltitude = Math.round(elements.semiMajorAxis - R_EARTH_EQUATORIAL)
+  const orbitInclination = elements.inclination
+
+  const effectiveParams = useMemo(() => {
+    if (params.syncWithOrbit) {
+      return { ...params, altitude: orbitAltitude, inclination: orbitInclination }
+    }
+    return params
+  }, [params, orbitAltitude, orbitInclination])
+
   const metrics = useMemo(
-    () => computeConstellationMetrics(params, mission.spacecraft.mass),
-    [params, mission.spacecraft.mass]
+    () => computeConstellationMetrics(effectiveParams, mission.spacecraft.mass),
+    [effectiveParams, mission.spacecraft.mass]
   )
 
-  // Preset constellations
+  // Preset constellations (presets break orbit sync)
   const presets: { label: string; params: WalkerParams }[] = [
-    { label: 'Starlink-like', params: { ...DEFAULT_WALKER, totalSats: 72, planes: 6, phasing: 1, altitude: 550, inclination: 53 } },
-    { label: 'GPS-like', params: { ...DEFAULT_WALKER, totalSats: 24, planes: 6, phasing: 1, altitude: 20200, inclination: 55 } },
-    { label: 'Iridium-like', params: { ...DEFAULT_WALKER, type: 'star', totalSats: 66, planes: 6, phasing: 2, altitude: 780, inclination: 86.4 } },
-    { label: 'Small SSO', params: { ...DEFAULT_WALKER, totalSats: 12, planes: 4, phasing: 1, altitude: 500, inclination: 97.4 } },
+    { label: 'Starlink-like', params: { ...DEFAULT_WALKER, syncWithOrbit: false, totalSats: 72, planes: 6, phasing: 1, altitude: 550, inclination: 53 } },
+    { label: 'GPS-like', params: { ...DEFAULT_WALKER, syncWithOrbit: false, totalSats: 24, planes: 6, phasing: 1, altitude: 20200, inclination: 55 } },
+    { label: 'Iridium-like', params: { ...DEFAULT_WALKER, syncWithOrbit: false, type: 'star', totalSats: 66, planes: 6, phasing: 2, altitude: 780, inclination: 86.4 } },
+    { label: 'Small SSO', params: { ...DEFAULT_WALKER, syncWithOrbit: false, totalSats: 12, planes: 4, phasing: 1, altitude: 500, inclination: 97.4 } },
   ]
 
   return (
@@ -77,8 +90,8 @@ export default function ConstellationPanel() {
           />
           <SliderInput
             label="Altitude"
-            value={params.altitude}
-            onChange={(v) => updateWalkerParams({ altitude: v })}
+            value={effectiveParams.altitude}
+            onChange={(v) => updateWalkerParams({ altitude: v, syncWithOrbit: false })}
             min={200}
             max={35786}
             step={10}
@@ -86,13 +99,26 @@ export default function ConstellationPanel() {
           />
           <SliderInput
             label="Inclination"
-            value={params.inclination}
-            onChange={(v) => updateWalkerParams({ inclination: v })}
+            value={effectiveParams.inclination}
+            onChange={(v) => updateWalkerParams({ inclination: v, syncWithOrbit: false })}
             min={0}
             max={180}
             step={0.1}
             unit={"\u00B0"}
           />
+          {params.syncWithOrbit && (
+            <div className="text-[9px] text-accent-blue/70 font-mono px-1">
+              Synced with orbit tab
+            </div>
+          )}
+          {!params.syncWithOrbit && (
+            <button
+              onClick={() => updateWalkerParams({ syncWithOrbit: true })}
+              className="text-[9px] text-[var(--text-tertiary)] hover:text-accent-blue font-mono px-1 transition-colors"
+            >
+              Reset to orbit tab values
+            </button>
+          )}
         </div>
       </SectionHeader>
 
@@ -112,7 +138,7 @@ export default function ConstellationPanel() {
 
       <SectionHeader title="Constellation Metrics" actions={
         <ExportCSVButton onClick={() => {
-          const sats = generateWalkerConstellation(params)
+          const sats = generateWalkerConstellation(effectiveParams)
           exportCSV(
             `${mission.name.replace(/\s+/g, '_')}_constellation`,
             ['Sat ID', 'Plane', 'Index', 'SMA (km)', 'Ecc', 'Inc (deg)', 'RAAN (deg)', 'AoP (deg)', 'True Anomaly (deg)'],

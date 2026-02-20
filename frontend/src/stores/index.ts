@@ -22,12 +22,23 @@ export const useStore = create<AppStore>()(
       }),
       {
         name: 'orbitforge-autosave',
-        version: 8,
+        version: 9,
         migrate: (persisted: any, version: number) => {
           if (version < 8) {
             // v8: Reset ground stations to new defaults (4 active stations)
             const { groundStations, ...rest } = persisted || {}
-            return rest as any
+            persisted = rest
+          }
+          if (version < 9) {
+            // v9: Add syncWithOrbit to walkerParams
+            // If user had custom walker params, preserve them (syncWithOrbit: false)
+            // Otherwise default to syncing with orbit tab
+            if (persisted?.walkerParams) {
+              persisted = {
+                ...persisted,
+                walkerParams: { ...persisted.walkerParams, syncWithOrbit: false },
+              }
+            }
           }
           return persisted as any
         },
