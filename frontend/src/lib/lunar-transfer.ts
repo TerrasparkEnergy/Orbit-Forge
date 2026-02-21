@@ -258,16 +258,11 @@ export function generateFlybyPath(
     approach.push({ x, y: 0, z })
   }
 
-  // ── Compute approach tangent at junction via finite difference ──
-  const dt = 0.001
-  const thBefore = thetaEnd - dt
-  const thAfter = thetaEnd + dt
-  const pBx = rPark + (moonX - rPark) * (1 - Math.cos(thBefore)) / 2
-  const pBz = -approachBulge * Math.sin(thBefore)
-  const pAx = rPark + (moonX - rPark) * (1 - Math.cos(thAfter)) / 2
-  const pAz = -approachBulge * Math.sin(thAfter)
-  const rawTanX = (pAx - pBx) / (2 * dt)
-  const rawTanZ = (pAz - pBz) / (2 * dt)
+  // ── Compute approach tangent from actual rendered points (not parametric formula) ──
+  const lastPt = approach[approach.length - 1]
+  const prevPt = approach[approach.length - 2]
+  const rawTanX = lastPt.x - prevPt.x
+  const rawTanZ = lastPt.z - prevPt.z
   const tanMag = Math.sqrt(rawTanX * rawTanX + rawTanZ * rawTanZ)
   const approachTanX = rawTanX / tanMag
   const approachTanZ = rawTanZ / tanMag
@@ -298,9 +293,9 @@ export function generateFlybyPath(
   const departTanZ = approachTanX * Math.sin(deflectionAngle) + approachTanZ * Math.cos(deflectionAngle)
 
   // ── Flyby arc: two cubic Bezier segments joined at periapsis (C1 continuous) ──
-  const flybyN = Math.floor(numPoints * 0.2)
+  const flybyN = Math.floor(numPoints * 0.25)
   const halfN = Math.floor(flybyN / 2)
-  const arm = jDist * 0.4 // Bezier control arm length
+  const arm = jDist * 0.5 // Bezier control arm length — long enough to enforce smoothness
 
   // Segment 1: junction → periapsis
   const S1P0x = junctionPt.x, S1P0z = junctionPt.z
@@ -373,7 +368,7 @@ export function generateFreeReturnTrajectory(
   const approach: Vec3[] = []
   const nearMoon: Vec3[] = []
   const departure: Vec3[] = []
-  const bulge = moonX * 0.22 // z-axis bulge for figure-8 shape
+  const bulge = moonX * 0.28 // z-axis bulge for figure-8 shape
 
   // Pre-compute swing arc endpoints for seamless phase continuity.
   // periFactor at edges: 1 + 0.8*(2*0.5)² = 1.8
@@ -415,14 +410,21 @@ export function generateFreeReturnTrajectory(
   }
 
   // ── Return: swingEndPt → Earth, arcing on -z side (creates figure-8) ──
+  // The -bulge * sin(PI*t) term MUST dominate z. A small correction
+  // fades out over the first 5% of t to connect to the swing-by endpoint.
   const retN = numPoints - outN - swingN
-  departure.push({ ...nearMoon[nearMoon.length - 1] })
+  const lastSwing = nearMoon[nearMoon.length - 1]
+  departure.push({ ...lastSwing })
   const reentryX = 0.02
   const reentryZ = -0.01
   for (let i = 1; i <= retN; i++) {
     const t = i / retN
-    const x = swingEndPt.x * (1 - t) + reentryX * t
-    const z = -bulge * Math.sin(t * Math.PI) + swingEndPt.z * (1 - t) + reentryZ * t
+    const x = lastSwing.x * (1 - t) + reentryX * t
+    // Pure -z arc + tiny reentry offset
+    const pureZ = -bulge * Math.sin(Math.PI * t) + reentryZ * t
+    // At t=0 pureZ=0 but we need lastSwing.z; fade this offset out over 5%
+    const blend = Math.min(t / 0.05, 1)
+    const z = pureZ + lastSwing.z * (1 - blend)
     departure.push({ x, y: 0, z })
   }
 
