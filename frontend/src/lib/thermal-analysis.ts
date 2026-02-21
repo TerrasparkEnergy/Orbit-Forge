@@ -34,11 +34,12 @@ export const DEFAULT_MATERIAL = 'black-anodized'
 
 /**
  * Compute Earth view factor from orbital altitude
- * F = 1 - sqrt(1 - (Re/(Re+h))^2)
+ * Standard flat-plate-to-sphere: F = sin^2(rho) = (Re/r)^2
+ * where rho is the Earth half-angle subtended at the spacecraft
  */
 export function computeEarthViewFactor(altitudeKm: number): number {
   const ratio = R_EARTH_EQUATORIAL / (R_EARTH_EQUATORIAL + altitudeKm)
-  return 1 - Math.sqrt(1 - ratio * ratio)
+  return ratio * ratio
 }
 
 /**
@@ -271,13 +272,12 @@ export function computeThermalSummary(
   const sunArea = cubeSatSunFacingArea(size)
   const earthArea = cubeSatEarthFacingArea(size)
   const totalArea = cubeSatSurfaceArea(size)
-  // Summary uses the same effective radiating area as the detailed model
-  const effectiveRadArea = totalArea * RADIATION_EFFICIENCY
 
   // Hot case: full sunlight
-  const hotCase = computeSteadyStateTemp(material, altitudeKm, true, internalPowerW, sunArea, earthArea, effectiveRadArea)
+  // Note: RADIATION_EFFICIENCY is applied inside computeSteadyStateTemp, so pass totalArea
+  const hotCase = computeSteadyStateTemp(material, altitudeKm, true, internalPowerW, sunArea, earthArea, totalArea)
   // Cold case: eclipse with reduced internal power
-  const coldCase = computeSteadyStateTemp(material, altitudeKm, false, internalPowerW * 0.3, sunArea, earthArea, effectiveRadArea)
+  const coldCase = computeSteadyStateTemp(material, altitudeKm, false, internalPowerW * 0.3, sunArea, earthArea, totalArea)
 
   const hotCaseStatus: ThermalSummary['hotCaseStatus'] =
     hotCase.temperatureC > 60 ? 'critical' :
