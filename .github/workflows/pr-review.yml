@@ -1,0 +1,16 @@
+name: PR Review & Auto-Merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+jobs:
+  review:
+    uses: TerrasparkEnergy/.github/.github/workflows/copilot-review-automerge.yml@main
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    with:
+      confidence_threshold: 85
+      auto_merge_strategy: squash
