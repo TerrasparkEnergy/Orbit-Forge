@@ -7,8 +7,6 @@ import {
   generateLunarTransferArc,
   generateFlybyPath,
   generateFreeReturnTrajectory,
-  generateDescentPath,
-  getLandingMarkerPosition,
 } from '@/lib/lunar-transfer'
 import type { PhasedTrajectory } from '@/lib/lunar-transfer'
 import { R_MOON } from '@/lib/beyond-leo-constants'
@@ -24,34 +22,45 @@ const COL_DEPART_FLYBY = '#F97316' // orange-red — flyby departure
 const COL_RETURN = '#22D3EE'    // cyan — free-return leg
 const COL_ORBIT = '#22D3EE'     // cyan — lunar orbit ring
 const COL_DESCENT = '#10B981'   // green — descent path
-const COL_MARKER = '#FFFFFF'    // white — closest approach dot
 
 function toTuple(p: { x: number; y: number; z: number }): [number, number, number] {
   return [p.x, p.y, p.z]
 }
 
-function SmallMarker({ position, color, label, altKm }: {
+/** Tiny annotation label — fixed screen-space size, offset from point */
+function AnnotationLabel({ position, color, text, offsetY = -14 }: {
   position: [number, number, number]
   color: string
-  label: string
-  altKm?: number
+  text: string
+  offsetY?: number
 }) {
   return (
     <group position={position}>
+      {/* Small dot at the actual point */}
       <mesh>
-        <sphereGeometry args={[0.006, 8, 8]} />
+        <sphereGeometry args={[0.004, 6, 6]} />
         <meshBasicMaterial color={color} />
       </mesh>
       <mesh>
-        <sphereGeometry args={[0.01, 8, 8]} />
-        <meshBasicMaterial color={color} transparent opacity={0.3} depthWrite={false} />
+        <sphereGeometry args={[0.007, 6, 6]} />
+        <meshBasicMaterial color={color} transparent opacity={0.25} depthWrite={false} />
       </mesh>
-      <Html center distanceFactor={3} style={{ pointerEvents: 'none' }}>
+      {/* Label offset away from trajectory */}
+      <Html center style={{ pointerEvents: 'none', transform: `translateY(${offsetY}px)` }}>
         <div
-          className="font-mono font-bold px-1 py-0.5 rounded whitespace-nowrap"
-          style={{ color, fontSize: '7px', background: 'rgba(0,0,0,0.55)' }}
+          style={{
+            color,
+            fontSize: '9px',
+            fontFamily: 'ui-monospace, monospace',
+            fontWeight: 600,
+            padding: '1px 3px',
+            borderRadius: '2px',
+            background: 'rgba(0,0,0,0.45)',
+            whiteSpace: 'nowrap',
+            lineHeight: 1,
+          }}
         >
-          {label}{altKm !== undefined ? ` ${altKm} km` : ''}
+          {text}
         </div>
       </Html>
     </group>
@@ -66,6 +75,10 @@ export default function LunarScene() {
 
   const earthR = R_EARTH_EQUATORIAL / SCENE_SCALE
   const moonR = R_MOON / SCENE_SCALE
+  // The visual Moon sphere is enlarged for visibility (min 0.012).
+  // Orbit rings and descent paths must use this visual radius as baseline,
+  // otherwise they'd be hidden inside the Moon sphere.
+  const visualMoonR = Math.max(moonR, 0.012)
 
   // ─── Orbit Insertion & Landing: basic transfer arc ───
   const transferPoints = useMemo(() => {
@@ -86,28 +99,44 @@ export default function LunarScene() {
   }, [params.departureAltKm, params.missionType])
 
   // ─── Lunar orbit ring — orbit insertion & landing ───
+  // Uses visual scale so the ring is clearly visible outside the Moon sphere
   const lunarOrbitPoints = useMemo(() => {
     if (params.missionType === 'flyby' || params.missionType === 'free-return') return []
-    const orbitR = (R_MOON + params.targetOrbitAltKm) / SCENE_SCALE
+    // Scale orbit proportionally with heavy exaggeration for visibility at full zoom
+    const altRatio = params.targetOrbitAltKm / R_MOON // e.g., 100/1737 = 0.058
+    const orbitR = visualMoonR * (1 + Math.max(altRatio * 25, 1.2)) // ~2-3x Moon radius
     const pts: [number, number, number][] = []
     for (let i = 0; i <= 64; i++) {
       const theta = (i / 64) * 2 * Math.PI
       pts.push([moonPos + orbitR * Math.cos(theta), 0, orbitR * Math.sin(theta)])
     }
     return pts
-  }, [params.missionType, params.targetOrbitAltKm, moonPos])
+  }, [params.missionType, params.targetOrbitAltKm, moonPos, visualMoonR])
 
-  // ─── Descent path — landing only ───
+  // ─── Descent path — landing only (visual scale) ───
   const descentPoints = useMemo(() => {
     if (params.missionType !== 'landing') return []
-    return generateDescentPath(params.targetOrbitAltKm).map(toTuple)
-  }, [params.missionType, params.targetOrbitAltKm])
+    const altRatio = params.targetOrbitAltKm / R_MOON
+    const orbitR = visualMoonR * (1 + Math.max(altRatio * 25, 1.2)) // must match orbit ring
+    const pts: [number, number, number][] = []
+    const numPoints = 40
+    // Spiral from orbit radius down to Moon surface
+    for (let i = 0; i <= numPoints; i++) {
+      const t = i / numPoints
+      const angle = t * Math.PI * 3 // 1.5 revolutions
+      const r = orbitR - t * (orbitR - visualMoonR)
+      pts.push([moonPos + r * Math.cos(angle), 0, r * Math.sin(angle)])
+    }
+    return pts
+  }, [params.missionType, params.targetOrbitAltKm, moonPos, visualMoonR])
 
-  // ─── Landing marker ───
-  const landingMarker = useMemo(() => {
+  // ─── Landing marker — on visual Moon surface ───
+  const landingMarker = useMemo<[number, number, number] | null>(() => {
     if (params.missionType !== 'landing') return null
-    return toTuple(getLandingMarkerPosition(params.targetOrbitAltKm))
-  }, [params.missionType, params.targetOrbitAltKm])
+    // Place at the end of the descent spiral (on Moon surface)
+    if (descentPoints.length > 0) return descentPoints[descentPoints.length - 1]
+    return [moonPos - visualMoonR * 0.9, 0, -visualMoonR * 0.4]
+  }, [params.missionType, descentPoints, moonPos, visualMoonR])
 
   // Set camera
   useMemo(() => {
@@ -121,77 +150,84 @@ export default function LunarScene() {
       <directionalLight position={[5, 3, 5]} intensity={1.2} />
       <Starfield />
 
-      {/* Earth */}
+      {/* Earth — small label offset below */}
       <group position={[0, 0, 0]}>
         <mesh>
           <sphereGeometry args={[Math.max(earthR, 0.02), 32, 32]} />
           <meshStandardMaterial color="#3B82F6" emissive="#1E40AF" emissiveIntensity={0.3} />
         </mesh>
-        <Html center distanceFactor={3} style={{ pointerEvents: 'none' }}>
-          <div className="text-[10px] font-mono font-bold px-1 py-0.5 rounded bg-black/60 text-blue-400 mt-6 whitespace-nowrap">
+        <Html center style={{ pointerEvents: 'none', transform: 'translateY(16px)' }}>
+          <div style={{
+            fontSize: '11px',
+            fontFamily: 'ui-monospace, monospace',
+            fontWeight: 700,
+            color: '#60A5FA',
+            padding: '1px 4px',
+            borderRadius: '2px',
+            background: 'rgba(0,0,0,0.4)',
+            whiteSpace: 'nowrap',
+          }}>
             Earth
           </div>
         </Html>
       </group>
 
-      {/* Moon — smaller label positioned below */}
+      {/* Moon — small label offset below sphere, not over trajectory area */}
       <group position={[moonPos, 0, 0]}>
         <mesh>
           <sphereGeometry args={[Math.max(moonR, 0.012), 16, 16]} />
           <meshStandardMaterial color="#9CA3AF" />
         </mesh>
-        <Html center distanceFactor={3} style={{ pointerEvents: 'none' }}>
-          <div
-            className="font-mono font-bold px-1 py-0.5 rounded text-gray-400 whitespace-nowrap"
-            style={{ fontSize: '8px', background: 'rgba(0,0,0,0.4)', marginTop: '18px' }}
-          >
+        <Html center style={{ pointerEvents: 'none', transform: 'translateY(14px)' }}>
+          <div style={{
+            fontSize: '10px',
+            fontFamily: 'ui-monospace, monospace',
+            fontWeight: 700,
+            color: '#9CA3AF',
+            padding: '1px 4px',
+            borderRadius: '2px',
+            background: 'rgba(0,0,0,0.35)',
+            whiteSpace: 'nowrap',
+          }}>
             Moon
           </div>
         </Html>
       </group>
 
       {/* ═══ ORBIT INSERTION ═══ */}
-      {/* Transfer arc (orange) */}
       {transferPoints.length > 2 && (
         <Line points={transferPoints} color={COL_APPROACH} lineWidth={2} transparent opacity={0.8} />
       )}
-      {/* Lunar orbit ring (cyan) */}
       {lunarOrbitPoints.length > 2 && (
         <Line points={lunarOrbitPoints} color={COL_ORBIT} lineWidth={1.5} transparent opacity={0.7} />
       )}
 
       {/* ═══ LANDING ═══ */}
-      {/* Descent spiral (green) */}
       {descentPoints.length > 2 && (
         <Line points={descentPoints} color={COL_DESCENT} lineWidth={2} transparent opacity={0.8} />
       )}
-      {/* Landing site marker */}
       {landingMarker && (
-        <SmallMarker position={landingMarker} color={COL_DESCENT} label="Landing Site" />
+        <AnnotationLabel position={landingMarker} color={COL_DESCENT} text="Landing" offsetY={-12} />
       )}
 
       {/* ═══ FLYBY ═══ */}
       {flybyPhases && (
         <>
-          {/* Approach leg (orange) */}
           {flybyPhases.approach.length > 2 && (
             <Line points={flybyPhases.approach.map(toTuple)} color={COL_APPROACH} lineWidth={2} transparent opacity={0.8} />
           )}
-          {/* Near-Moon deflection arc (yellow, thicker) */}
           {flybyPhases.nearMoon.length > 2 && (
             <Line points={flybyPhases.nearMoon.map(toTuple)} color={COL_NEARMOON} lineWidth={3.5} transparent opacity={0.9} />
           )}
-          {/* Departure leg (orange-red) */}
           {flybyPhases.departure.length > 2 && (
             <Line points={flybyPhases.departure.map(toTuple)} color={COL_DEPART_FLYBY} lineWidth={2} transparent opacity={0.8} />
           )}
-          {/* Closest approach marker */}
           {flybyPhases.closestApproach && (
-            <SmallMarker
+            <AnnotationLabel
               position={toTuple(flybyPhases.closestApproach)}
-              color={COL_MARKER}
-              label="CA:"
-              altKm={200}
+              color="#FFFFFF"
+              text="CA: 200 km"
+              offsetY={-14}
             />
           )}
         </>
@@ -200,33 +236,29 @@ export default function LunarScene() {
       {/* ═══ FREE-RETURN ═══ */}
       {freeReturnPhases && (
         <>
-          {/* Outbound leg (orange) */}
           {freeReturnPhases.approach.length > 2 && (
             <Line points={freeReturnPhases.approach.map(toTuple)} color={COL_APPROACH} lineWidth={2} transparent opacity={0.8} />
           )}
-          {/* Swing-by arc (yellow, thicker) */}
           {freeReturnPhases.nearMoon.length > 2 && (
             <Line points={freeReturnPhases.nearMoon.map(toTuple)} color={COL_NEARMOON} lineWidth={3.5} transparent opacity={0.9} />
           )}
-          {/* Return leg (cyan) */}
           {freeReturnPhases.departure.length > 2 && (
             <Line points={freeReturnPhases.departure.map(toTuple)} color={COL_RETURN} lineWidth={2} transparent opacity={0.8} />
           )}
-          {/* Closest approach marker */}
           {freeReturnPhases.closestApproach && (
-            <SmallMarker
+            <AnnotationLabel
               position={toTuple(freeReturnPhases.closestApproach)}
-              color={COL_MARKER}
-              label="CA:"
-              altKm={150}
+              color="#FFFFFF"
+              text="CA: 150 km"
+              offsetY={-14}
             />
           )}
-          {/* Earth re-entry marker */}
           {freeReturnPhases.earthReturn && (
-            <SmallMarker
+            <AnnotationLabel
               position={toTuple(freeReturnPhases.earthReturn)}
-              color="#3B82F6"
-              label="Re-entry"
+              color="#60A5FA"
+              text="Re-entry"
+              offsetY={12}
             />
           )}
         </>

@@ -26,8 +26,18 @@ function LPointMarker({ position, label, color }: { position: [number, number, n
         <sphereGeometry args={[0.025, 8, 8]} />
         <meshBasicMaterial color={color} transparent opacity={0.3} depthWrite={false} />
       </mesh>
-      <Html center distanceFactor={5} style={{ pointerEvents: 'none' }}>
-        <div className="text-[10px] font-mono font-bold px-1 py-0.5 rounded bg-black/60 whitespace-nowrap" style={{ color }}>
+      <Html center style={{ pointerEvents: 'none', transform: 'translateY(-14px)' }}>
+        <div style={{
+          color,
+          fontSize: '9px',
+          fontFamily: 'ui-monospace, monospace',
+          fontWeight: 600,
+          padding: '1px 3px',
+          borderRadius: '2px',
+          background: 'rgba(0,0,0,0.45)',
+          whiteSpace: 'nowrap',
+          lineHeight: 1,
+        }}>
           {label}
         </div>
       </Html>
@@ -105,8 +115,18 @@ export default function LagrangeScene() {
           <sphereGeometry args={[primarySize, 32, 32]} />
           <meshStandardMaterial color={primaryColor} emissive={primaryColor} emissiveIntensity={0.5} />
         </mesh>
-        <Html center distanceFactor={5} style={{ pointerEvents: 'none' }}>
-          <div className="text-[10px] font-mono font-bold px-1 py-0.5 rounded bg-black/60 text-white mt-6 whitespace-nowrap">
+        <Html center style={{ pointerEvents: 'none', transform: 'translateY(16px)' }}>
+          <div style={{
+            fontSize: '10px',
+            fontFamily: 'ui-monospace, monospace',
+            fontWeight: 700,
+            color: primaryColor,
+            padding: '1px 4px',
+            borderRadius: '2px',
+            background: 'rgba(0,0,0,0.4)',
+            whiteSpace: 'nowrap',
+            lineHeight: 1,
+          }}>
             {primaryLabel}
           </div>
         </Html>
@@ -118,8 +138,18 @@ export default function LagrangeScene() {
           <sphereGeometry args={[secondarySize, 16, 16]} />
           <meshStandardMaterial color={secondaryColor} />
         </mesh>
-        <Html center distanceFactor={5} style={{ pointerEvents: 'none' }}>
-          <div className="text-[10px] font-mono font-bold px-1 py-0.5 rounded bg-black/60 text-white mt-4 whitespace-nowrap">
+        <Html center style={{ pointerEvents: 'none', transform: 'translateY(14px)' }}>
+          <div style={{
+            fontSize: '10px',
+            fontFamily: 'ui-monospace, monospace',
+            fontWeight: 700,
+            color: secondaryColor,
+            padding: '1px 4px',
+            borderRadius: '2px',
+            background: 'rgba(0,0,0,0.4)',
+            whiteSpace: 'nowrap',
+            lineHeight: 1,
+          }}>
             {secondaryLabel}
           </div>
         </Html>
