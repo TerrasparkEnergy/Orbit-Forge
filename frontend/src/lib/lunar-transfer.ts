@@ -186,15 +186,20 @@ const VISUAL_MOON_R = Math.max(R_MOON / LUNAR_SCENE_SCALE, 0.012)
  */
 export function generateLunarTransferArc(
   departureAltKm: number,
+  targetOrbitAltKm = 100,
   numPoints = 80,
 ): Array<{ x: number; y: number; z: number }> {
   const rPark = (R_EARTH_EQUATORIAL + departureAltKm) / LUNAR_SCENE_SCALE
   const moonDist = MOON_SEMI_MAJOR_AXIS / LUNAR_SCENE_SCALE
+  // End at the Earth-facing edge of the orbit ring, not Moon center
+  const altRatio = targetOrbitAltKm / R_MOON
+  const orbitR = VISUAL_MOON_R * (1 + Math.max(altRatio * 25, 1.2))
+  const endX = moonDist - orbitR
   const semiMinor = moonDist * 0.12
   const points: Array<{ x: number; y: number; z: number }> = []
   for (let i = 0; i <= numPoints; i++) {
     const t = i / numPoints
-    const x = rPark + (moonDist - rPark) * t
+    const x = rPark + (endX - rPark) * t
     const z = -semiMinor * Math.sin(t * Math.PI)
     points.push({ x, y: 0, z })
   }
@@ -238,15 +243,15 @@ export function generateFlybyPath(
   }
 
   const flybyN = Math.floor(numPoints * 0.25)
-  const arcStartAngle = Math.PI * 0.85
-  const arcEndAngle = -Math.PI * 0.15
+  const arcStartAngle = Math.PI * 0.7
+  const arcEndAngle = -Math.PI * 0.13
   let closestApproach: Vec3 | null = null
   let minDistFromMoon = Infinity
   nearMoon.push({ ...approach[approach.length - 1] })
   for (let i = 0; i <= flybyN; i++) {
     const t = i / flybyN
     const angle = arcStartAngle + t * (arcEndAngle - arcStartAngle)
-    const periapsisFactor = 1 + 1.5 * Math.pow(2 * Math.abs(t - 0.5), 2)
+    const periapsisFactor = 1 + 0.8 * Math.pow(2 * Math.abs(t - 0.5), 2)
     const dist = flybyR * periapsisFactor
     const pt: Vec3 = { x: moonX + dist * Math.cos(angle), y: 0, z: dist * Math.sin(angle) }
     nearMoon.push(pt)

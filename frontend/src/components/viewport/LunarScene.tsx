@@ -83,8 +83,8 @@ export default function LunarScene() {
   // ─── Orbit Insertion & Landing: basic transfer arc ───
   const transferPoints = useMemo(() => {
     if (params.missionType === 'flyby' || params.missionType === 'free-return') return []
-    return generateLunarTransferArc(params.departureAltKm).map(toTuple)
-  }, [params.departureAltKm, params.missionType])
+    return generateLunarTransferArc(params.departureAltKm, params.targetOrbitAltKm).map(toTuple)
+  }, [params.departureAltKm, params.missionType, params.targetOrbitAltKm])
 
   // ─── Flyby: phased trajectory ───
   const flybyPhases = useMemo<PhasedTrajectory | null>(() => {
