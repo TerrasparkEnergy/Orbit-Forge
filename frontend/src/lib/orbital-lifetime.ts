@@ -108,14 +108,14 @@ export function simulateDecay(
   points.push({ days: 0, altitude: alt })
 
   for (let d = stepDays; d <= maxDays; d += stepDays) {
-    const rate = decayRate(alt, ballisticCoeffM2Kg, solarActivity)
-    alt += rate * stepDays // rate is negative
+    // Use finer sub-steps below 200km where decay accelerates rapidly
+    const subSteps = (alt < 200 && stepDays > 0.1) ? Math.ceil(stepDays / 0.1) : 1
+    const subDt = stepDays / subSteps
 
-    // Use adaptive step size at low altitudes
-    if (alt < 200 && stepDays > 0.1) {
-      // Re-simulate with finer steps below 200km for accuracy
-      const refinedRate = decayRate(alt, ballisticCoeffM2Kg, solarActivity)
-      alt += refinedRate * stepDays * 0.5 // acceleration of decay
+    for (let s = 0; s < subSteps; s++) {
+      const rate = decayRate(alt, ballisticCoeffM2Kg, solarActivity)
+      alt += rate * subDt // rate is negative
+      if (alt <= 80) break
     }
 
     if (alt <= 80) {

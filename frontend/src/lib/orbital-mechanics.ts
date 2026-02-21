@@ -87,9 +87,11 @@ export function trueToMeanAnomaly(nu: number, e: number): number {
  * Compute J2 secular rate of change of RAAN (deg/day)
  */
 export function computeJ2RAANDrift(a: number, e: number, iDeg: number): number {
+  if (e >= 1) return NaN // J2 secular rates undefined for parabolic/hyperbolic orbits
   const i = iDeg * DEG2RAD
   const n = Math.sqrt(MU_EARTH_KM / (a * a * a)) // mean motion (rad/s)
   const p = a * (1 - e * e) // semi-latus rectum (km)
+  if (p <= 0) return NaN
 
   // RAAN drift rate (rad/s)
   const dOmega = -1.5 * n * J2 * Math.pow(R_EARTH_EQUATORIAL / p, 2) * Math.cos(i)
@@ -102,9 +104,11 @@ export function computeJ2RAANDrift(a: number, e: number, iDeg: number): number {
  * Compute J2 secular rate of change of argument of perigee (deg/day)
  */
 export function computeJ2ArgPerigeeDrift(a: number, e: number, iDeg: number): number {
+  if (e >= 1) return NaN // J2 secular rates undefined for parabolic/hyperbolic orbits
   const i = iDeg * DEG2RAD
   const n = Math.sqrt(MU_EARTH_KM / (a * a * a))
   const p = a * (1 - e * e)
+  if (p <= 0) return NaN
 
   // Argument of perigee drift rate (rad/s)
   const domega = 0.75 * n * J2 * Math.pow(R_EARTH_EQUATORIAL / p, 2) * (5 * Math.cos(i) * Math.cos(i) - 1)
