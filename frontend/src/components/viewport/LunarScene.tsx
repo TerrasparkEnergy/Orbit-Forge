@@ -100,32 +100,44 @@ export default function LunarScene() {
 
   // ─── Lunar orbit ring — orbit insertion & landing ───
   // Uses visual scale so the ring is clearly visible outside the Moon sphere
+  // Tilted ~10° for 3D appearance
   const lunarOrbitPoints = useMemo(() => {
     if (params.missionType === 'flyby' || params.missionType === 'free-return') return []
     // Scale orbit proportionally with heavy exaggeration for visibility at full zoom
     const altRatio = params.targetOrbitAltKm / R_MOON // e.g., 100/1737 = 0.058
     const orbitR = visualMoonR * (1 + Math.max(altRatio * 25, 1.2)) // ~2-3x Moon radius
+    const tilt = 10 * Math.PI / 180 // 10° tilt for 3D appearance
     const pts: [number, number, number][] = []
     for (let i = 0; i <= 64; i++) {
       const theta = (i / 64) * 2 * Math.PI
-      pts.push([moonPos + orbitR * Math.cos(theta), 0, orbitR * Math.sin(theta)])
+      pts.push([
+        moonPos + orbitR * Math.cos(theta),
+        orbitR * Math.sin(theta) * Math.sin(tilt),
+        orbitR * Math.sin(theta) * Math.cos(tilt),
+      ])
     }
     return pts
   }, [params.missionType, params.targetOrbitAltKm, moonPos, visualMoonR])
 
   // ─── Descent path — landing only (visual scale) ───
+  // Spiral from orbit ring down to Moon surface with ~3 revolutions
   const descentPoints = useMemo(() => {
     if (params.missionType !== 'landing') return []
     const altRatio = params.targetOrbitAltKm / R_MOON
     const orbitR = visualMoonR * (1 + Math.max(altRatio * 25, 1.2)) // must match orbit ring
+    const tilt = 10 * Math.PI / 180 // match orbit ring tilt
     const pts: [number, number, number][] = []
-    const numPoints = 40
-    // Spiral from orbit radius down to Moon surface
+    const numPoints = 60
+    // Spiral from orbit radius down to Moon surface — 3 full revolutions
     for (let i = 0; i <= numPoints; i++) {
       const t = i / numPoints
-      const angle = t * Math.PI * 3 // 1.5 revolutions
+      const angle = t * Math.PI * 6 // 3 full revolutions
       const r = orbitR - t * (orbitR - visualMoonR)
-      pts.push([moonPos + r * Math.cos(angle), 0, r * Math.sin(angle)])
+      pts.push([
+        moonPos + r * Math.cos(angle),
+        r * Math.sin(angle) * Math.sin(tilt),
+        r * Math.sin(angle) * Math.cos(tilt),
+      ])
     }
     return pts
   }, [params.missionType, params.targetOrbitAltKm, moonPos, visualMoonR])

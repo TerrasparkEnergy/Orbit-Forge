@@ -178,9 +178,11 @@ export function solveLambert(
     ? Math.sqrt(Math.max(0, 1 - cosNu * cosNu)) * (cross >= 0 ? 1 : -1)
     : -Math.sqrt(Math.max(0, 1 - cosNu * cosNu)) * (cross >= 0 ? 1 : -1)
 
-  // Direction-of-motion multiplier: A must be negative when the transfer
-  // angle > 180° (cross product negative for prograde short-way transfers)
-  const dm = shortWay ? (cross >= 0 ? 1 : -1) : (cross >= 0 ? -1 : 1)
+  // Direction-of-motion multiplier: A is positive for short-way (Δν < π),
+  // negative for long-way (Δν > π). This is independent of the cross product —
+  // the cross product determines the natural transfer angle, but shortWay/longWay
+  // selects which solution branch we want.
+  const dm = shortWay ? 1 : -1
   const A = dm * Math.sqrt(r1Mag * r2Mag * (1 + cosNu))
   if (Math.abs(A) < 1e-10) return null
 

@@ -170,10 +170,19 @@ export function computeLunarResult(params: LunarParams): LunarResult {
 /** Scene scale matching LunarScene.tsx — 1 unit ≈ 400,000 km */
 const LUNAR_SCENE_SCALE = 400000
 
+/** Visual Moon radius in scene units — matches the enlarged Moon sphere in LunarScene.
+ *  The physical radius (R_MOON/400000 = 0.00434) is too small to see,
+ *  so LunarScene enlarges it to 0.012 minimum. All near-Moon arcs must
+ *  stay outside this visual radius to avoid clipping through the sphere. */
+const VISUAL_MOON_R = Math.max(R_MOON / LUNAR_SCENE_SCALE, 0.012)
+
 /**
  * Generate lunar transfer arc for 3D rendering.
  * Uses LUNAR_SCENE_SCALE so coordinates match LunarScene.tsx exactly.
  * Earth at origin, Moon at 384400/400000 ≈ 0.961 on the x-axis.
+ *
+ * Shape: half-ellipse from parking orbit to Moon distance, curving below
+ * the Earth-Moon line. This approximates a Hohmann transfer arc.
  */
 export function generateLunarTransferArc(
   departureAltKm: number,
@@ -182,15 +191,16 @@ export function generateLunarTransferArc(
   const rPark = (R_EARTH_EQUATORIAL + departureAltKm) / LUNAR_SCENE_SCALE
   const moonDist = MOON_SEMI_MAJOR_AXIS / LUNAR_SCENE_SCALE // 0.961
 
-  const points: Array<{ x: number; y: number; z: number }> = []
-  const arcHeight = moonDist * 0.2 // visible arc curvature
+  // Semi-minor axis for visible curvature (~12% of transfer distance)
+  const b = moonDist * 0.12
 
+  const points: Array<{ x: number; y: number; z: number }> = []
   for (let i = 0; i <= numPoints; i++) {
-    const t = i / numPoints
-    // Smooth interpolation from parking orbit to Moon
-    const x = rPark + t * (moonDist - rPark)
-    // Parabolic arc below the Earth-Moon line for visual clarity
-    const z = -arcHeight * 4 * t * (1 - t)
+    const theta = (i / numPoints) * Math.PI // 0 to π for half ellipse
+    // Parametric half-ellipse: x sweeps from rPark to moonDist
+    const x = rPark + (moonDist - rPark) * (1 - Math.cos(theta)) / 2
+    // Curves below the Earth-Moon line
+    const z = -b * Math.sin(theta)
     points.push({ x, y: 0, z })
   }
   return points
@@ -209,7 +219,8 @@ export interface PhasedTrajectory {
 
 /**
  * Generate flyby trajectory with phase-segmented output for color-coded rendering.
- * Uses LUNAR_SCENE_SCALE for positions; original parametric shape for correct deflection.
+ * Uses LUNAR_SCENE_SCALE for positions; visual Moon radius ensures the arc
+ * stays outside the enlarged Moon sphere.
  */
 export function generateFlybyPath(
   departureAltKm: number,
@@ -218,14 +229,18 @@ export function generateFlybyPath(
 ): PhasedTrajectory {
   const rPark = (R_EARTH_EQUATORIAL + departureAltKm) / LUNAR_SCENE_SCALE
   const moonX = MOON_SEMI_MAJOR_AXIS / LUNAR_SCENE_SCALE
-  const flybyR = (R_MOON + closestApproachKm) / LUNAR_SCENE_SCALE
+
+  // Flyby closest approach must be OUTSIDE the visual Moon sphere.
+  // Exaggerate the CA altitude proportionally (like orbit ring exaggeration)
+  // so the arc is clearly visible outside the Moon.
+  const caRatio = closestApproachKm / R_MOON // e.g., 200/1737 ≈ 0.115
+  const flybyR = VISUAL_MOON_R * (1 + Math.max(caRatio * 20, 0.8))
 
   const approach: Vec3[] = []
   const nearMoon: Vec3[] = []
   const departure: Vec3[] = []
 
-  // Phase 1: Inbound transfer arc — parametric elliptical shape
-  // Approach ends offset from Moon so the near-Moon deflection angle is non-zero
+  // Phase 1: Inbound transfer arc — half-ellipse curving toward Moon
   const inboundN = Math.floor(numPoints * 0.6)
   for (let i = 0; i <= inboundN; i++) {
     const t = i / inboundN
@@ -239,6 +254,7 @@ export function generateFlybyPath(
   }
 
   // Phase 2: Hyperbolic flyby — smooth deflection ~60° past Moon
+  // The arc passes OUTSIDE the Moon at flybyR from Moon center
   const flybyN = Math.floor(numPoints * 0.2)
   const lastInbound = approach[approach.length - 1]
   nearMoon.push({ ...lastInbound })
@@ -251,6 +267,7 @@ export function generateFlybyPath(
   for (let i = 1; i <= flybyN; i++) {
     const t = i / flybyN
     const angle = approachAngle + t * deflectionAngle
+    // Distance varies: closest at t=0.5, farther at start/end
     const distFromMoon = flybyR + flybyR * 2 * Math.pow(Math.abs(t - 0.5) * 2, 1.5)
     const pt: Vec3 = {
       x: moonX + distFromMoon * Math.cos(angle),
@@ -295,7 +312,9 @@ export function generateFreeReturnTrajectory(
 ): PhasedTrajectory {
   const rPark = (R_EARTH_EQUATORIAL + departureAltKm) / LUNAR_SCENE_SCALE
   const moonX = MOON_SEMI_MAJOR_AXIS / LUNAR_SCENE_SCALE
-  const swingbyR = (R_MOON + 150) / LUNAR_SCENE_SCALE
+  // Use visual Moon radius so swing-by arc stays outside the enlarged Moon sphere
+  const caRatio = 150 / R_MOON
+  const swingbyR = VISUAL_MOON_R * (1 + Math.max(caRatio * 20, 0.8))
 
   const approach: Vec3[] = []
   const nearMoon: Vec3[] = []
