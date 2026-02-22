@@ -282,6 +282,11 @@ export function generateFlybyPath(
   closestApproachKm = 200,
   numPoints = 120,
 ): PhasedTrajectory {
+  // ─── STEP 1: Debug constants ───
+  console.log('[DEBUG] MOON_X_SCENE =', MOON_X_SCENE)
+  console.log('[DEBUG] LUNAR_SCENE_SCALE =', LUNAR_SCENE_SCALE)
+  console.log('[DEBUG] VISUAL_MOON_R =', VISUAL_MOON_R)
+
   // ─── Transfer ellipse parameters ───
   const { sma, e, p } = computeTransferElements(departureAltKm)
   const nuHandoff = findSOIEntry(p, e)
@@ -330,9 +335,32 @@ export function generateFlybyPath(
   const thetaRot = arrivalAngle - incomingAsymAngle
   console.log('[FLYBY] NEW thetaRot (deg)=', thetaRot * 180 / Math.PI)
 
-  // ─── Hyperbola ν-range: start/end at SOI boundary ───
+  // ─── STEP 2: Debug periapsis point through hyperbolaToScene ───
+  const xH_peri = rPeri  // local x before rotation (km) — at ν=0, cos(0)=1
+  const zH_peri = 0      // local z before rotation (km) — at ν=0, sin(0)=0
+
+  // After rotation by thetaRot:
+  const xRot_peri = xH_peri * Math.cos(thetaRot) - zH_peri * Math.sin(thetaRot)
+  const zRot_peri = xH_peri * Math.sin(thetaRot) + zH_peri * Math.cos(thetaRot)
+  console.log('[DEBUG] Periapsis rotated (km): xRot=', xRot_peri, 'zRot=', zRot_peri)
+
+  // What hyperbolaToScene SHOULD produce for this point:
+  const expected_x = MOON_X_SCENE + xRot_peri / LUNAR_SCENE_SCALE
+  const expected_z = zRot_peri / LUNAR_SCENE_SCALE
+  console.log('[DEBUG] Expected periapsis scene coords: x=', expected_x, 'z=', expected_z)
+  console.log('[DEBUG] Expected dist from Moon (scene)=', Math.sqrt((expected_x - MOON_X_SCENE) ** 2 + expected_z ** 2))
+
+  // What hyperbolaToScene ACTUALLY produces:
+  const actualPt = hyperbolaToScene(xH_peri, zH_peri, thetaRot)
+  console.log('[DEBUG] Actual periapsis from hyperbolaToScene: x=', actualPt.x, 'z=', actualPt.z)
+  console.log('[DEBUG] Actual dist from Moon (scene)=', Math.sqrt((actualPt.x - MOON_X_SCENE) ** 2 + actualPt.z ** 2))
+
+  // ─── STEP 4: Check nuSOI and radius at SOI entry ───
   const cosNuSOI = Math.max(-1, Math.min(1, (pHyp / MOON_SOI_KM - 1) / eHyp))
   const nuSOI = Math.acos(cosNuSOI)
+  const rAtSOI = pHyp / (1 + eHyp * Math.cos(nuSOI))
+  console.log('[DEBUG] nuSOI (deg)=', nuSOI * 180 / Math.PI)
+  console.log('[DEBUG] Hyperbola radius at SOI entry (km)=', rAtSOI, 'expected ~66000')
 
   // ─── Segment B: Incoming hyperbola (ν = −nuSOI → 0 periapsis) → nearMoon ───
   const nearN = Math.floor(numPoints * 0.3)
