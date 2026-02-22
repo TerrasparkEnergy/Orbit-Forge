@@ -215,24 +215,137 @@ function hyperbolaToScene(xH: number, zH: number, thetaRot: number): Vec3 {
   }
 }
 
+/* ── RK4 numerical propagator ────────────────────────────────── */
+
+/** Visual Moon radius in scene units (matches LunarScene.tsx) */
+const VISUAL_MOON_R = Math.max(R_MOON / LUNAR_SCENE_SCALE, 0.012)
+
+/** Gravitational acceleration from Earth + Moon at position (x, z) in km */
+function accel(x: number, z: number): { ax: number; az: number } {
+  const rE = Math.sqrt(x * x + z * z)
+  const rM = Math.sqrt((x - MOON_SEMI_MAJOR_AXIS) ** 2 + z * z)
+  return {
+    ax: -MU_EARTH_KM * x / (rE ** 3) - MU_MOON * (x - MOON_SEMI_MAJOR_AXIS) / (rM ** 3),
+    az: -MU_EARTH_KM * z / (rE ** 3) - MU_MOON * z / (rM ** 3),
+  }
+}
+
+/** Single RK4 integration step */
+function rk4Step(
+  x: number, z: number, vx: number, vz: number, dt: number
+): { x: number; z: number; vx: number; vz: number } {
+  function deriv(x: number, z: number, vx: number, vz: number) {
+    const a = accel(x, z)
+    return { dx: vx, dz: vz, dvx: a.ax, dvz: a.az }
+  }
+  const k1 = deriv(x, z, vx, vz)
+  const k2 = deriv(x + k1.dx * dt / 2, z + k1.dz * dt / 2,
+                    vx + k1.dvx * dt / 2, vz + k1.dvz * dt / 2)
+  const k3 = deriv(x + k2.dx * dt / 2, z + k2.dz * dt / 2,
+                    vx + k2.dvx * dt / 2, vz + k2.dvz * dt / 2)
+  const k4 = deriv(x + k3.dx * dt, z + k3.dz * dt,
+                    vx + k3.dvx * dt, vz + k3.dvz * dt)
+  return {
+    x:  x  + dt / 6 * (k1.dx  + 2 * k2.dx  + 2 * k3.dx  + k4.dx),
+    z:  z  + dt / 6 * (k1.dz  + 2 * k2.dz  + 2 * k3.dz  + k4.dz),
+    vx: vx + dt / 6 * (k1.dvx + 2 * k2.dvx + 2 * k3.dvx + k4.dvx),
+    vz: vz + dt / 6 * (k1.dvz + 2 * k2.dvz + 2 * k3.dvz + k4.dvz),
+  }
+}
+
+/**
+ * Propagate a trajectory from LEO departure under Earth+Moon gravity.
+ * Returns scene-coordinate points sampled at regular intervals.
+ */
+function propagateTrajectory(
+  departureAltKm: number,
+  vzAdjust: number,
+  maxDays: number,
+  dt = 30,
+  sampleInterval = 200,
+): { points: Vec3[]; closestApproachKm: number; closestApproachIdx: number } {
+  const r0 = R_EARTH_EQUATORIAL + departureAltKm
+  const sma = (r0 + MOON_SEMI_MAJOR_AXIS) / 2
+  const vTLI = Math.sqrt(MU_EARTH_KM * (2 / r0 - 1 / sma))
+
+  // Start at perigee: position (-r0, 0), velocity (0, -(vTLI + adjust))
+  // This launches clockwise with apogee toward +x (Moon direction)
+  let x = -r0, z = 0
+  let vx = 0, vz = -(vTLI + vzAdjust)
+
+  const points: Vec3[] = []
+  let closestMoonDist = Infinity
+  let closestApproachIdx = 0
+
+  const maxSteps = Math.floor(maxDays * 86400 / dt)
+  for (let step = 0; step <= maxSteps; step++) {
+    const rMoon = Math.sqrt((x - MOON_SEMI_MAJOR_AXIS) ** 2 + z * z)
+
+    if (step % sampleInterval === 0) {
+      points.push({ x: x / LUNAR_SCENE_SCALE, y: 0, z: z / LUNAR_SCENE_SCALE })
+      if (rMoon < closestMoonDist) {
+        closestMoonDist = rMoon
+        closestApproachIdx = points.length - 1
+      }
+    }
+
+    // Stop if crashed
+    if (rMoon < R_MOON || Math.sqrt(x * x + z * z) < R_EARTH_EQUATORIAL) break
+
+    const next = rk4Step(x, z, vx, vz, dt)
+    x = next.x; z = next.z; vx = next.vx; vz = next.vz
+  }
+
+  return {
+    points,
+    closestApproachKm: Math.max(0, closestMoonDist - R_MOON),
+    closestApproachIdx,
+  }
+}
+
+/**
+ * Find the velocity adjustment that achieves a target closest approach.
+ * Uses bisection search on the vz offset from Hohmann velocity.
+ */
+function findVzForCA(departureAltKm: number, targetCAKm: number, maxDays: number): number {
+  let lo = -0.01  // 10 m/s faster (closer CA)
+  let hi = 0.01   // 10 m/s slower (farther CA)
+
+  for (let iter = 0; iter < 30; iter++) {
+    const mid = (lo + hi) / 2
+    const result = propagateTrajectory(departureAltKm, mid, maxDays, 30, 500)
+    if (result.closestApproachKm < targetCAKm) hi = mid
+    else lo = mid
+  }
+  return (lo + hi) / 2
+}
+
 /**
  * Generate lunar transfer arc for 3D rendering.
- * Keplerian transfer ellipse from parking orbit to lunar distance.
+ * RK4 numerical propagation under Earth+Moon gravity.
  * Earth at origin, Moon at ~0.961 on the x-axis.
  */
 export function generateLunarTransferArc(
   departureAltKm: number,
   _targetOrbitAltKm = 100,
   numPoints = 120,
-): Array<{ x: number; y: number; z: number }> {
-  const { p, e } = computeTransferElements(departureAltKm)
-  const points: Array<{ x: number; y: number; z: number }> = []
-  for (let i = 0; i <= numPoints; i++) {
-    const nu = (i / numPoints) * Math.PI
-    const r = keplerRadius(nu, p, e)
-    points.push(transferToScene(nu, r, Math.PI))
+): Vec3[] {
+  // Propagate with Hohmann velocity (no CA targeting needed — just reach Moon)
+  const result = propagateTrajectory(departureAltKm, 0, 5, 30,
+    Math.max(1, Math.floor(5 * 86400 / 30 / numPoints)))
+
+  // Trim: stop when within visual Moon radius * 2
+  const stopDist = VISUAL_MOON_R * 2
+  let endIdx = result.points.length
+  for (let i = Math.floor(result.points.length / 2); i < result.points.length; i++) {
+    const dx = result.points[i].x - MOON_X_SCENE
+    const dz = result.points[i].z
+    if (Math.sqrt(dx * dx + dz * dz) < stopDist) {
+      endIdx = i + 1
+      break
+    }
   }
-  return points
+  return result.points.slice(0, endIdx)
 }
 
 type Vec3 = { x: number; y: number; z: number }
@@ -249,208 +362,94 @@ export interface PhasedTrajectory {
 
 /**
  * Generate flyby trajectory with phase-segmented output for color-coded rendering.
- * Patched conics: transfer ellipse approach → hyperbolic lunar encounter → departure.
+ * RK4 numerical propagation under Earth+Moon gravity — one continuous curve.
  */
 export function generateFlybyPath(
   departureAltKm: number,
   closestApproachKm = 200,
   numPoints = 120,
 ): PhasedTrajectory {
-  const { sma, e, p } = computeTransferElements(departureAltKm)
+  // Find velocity that gives target CA
+  const vzAdj = findVzForCA(departureAltKm, closestApproachKm, 7)
 
-  // ── Find SOI handoff true anomaly via bisection ──
-  let nuLow = Math.PI * 0.5, nuHigh = Math.PI
-  for (let iter = 0; iter < 60; iter++) {
-    const nuMid = (nuLow + nuHigh) / 2
-    const r = keplerRadius(nuMid, p, e)
-    const pt = transferToScene(nuMid, r, Math.PI)
-    const dist = Math.sqrt((pt.x - MOON_X_SCENE) ** 2 + pt.z ** 2) * LUNAR_SCENE_SCALE
-    if (dist > MOON_SOI_KM) nuLow = nuMid
-    else nuHigh = nuMid
+  // Propagate full trajectory
+  const sampleEvery = Math.max(1, Math.floor(7 * 86400 / 30 / (numPoints * 1.5)))
+  const result = propagateTrajectory(departureAltKm, vzAdj, 7, 30, sampleEvery)
+  const pts = result.points
+  const caIdx = result.closestApproachIdx
+
+  // Split into 3 phases based on Moon distance
+  // Phase 1 (approach): start → enters Moon SOI (66,000 km)
+  // Phase 2 (nearMoon): within SOI
+  // Phase 3 (departure): exits SOI → end
+  const soiScene = MOON_SOI_KM / LUNAR_SCENE_SCALE
+
+  let soiEntryIdx = 0
+  let soiExitIdx = pts.length - 1
+
+  for (let i = 0; i < caIdx; i++) {
+    const d = Math.sqrt((pts[i].x - MOON_X_SCENE) ** 2 + pts[i].z ** 2)
+    if (d < soiScene) { soiEntryIdx = i; break }
   }
-  const nuHandoff = (nuLow + nuHigh) / 2
-
-  // ── Segment A: Transfer ellipse Earth → SOI boundary ──
-  const approachN = Math.floor(numPoints * 0.4)
-  const approach: Vec3[] = []
-  for (let i = 0; i <= approachN; i++) {
-    const nu = (i / approachN) * nuHandoff
-    const r = keplerRadius(nu, p, e)
-    approach.push(transferToScene(nu, r, Math.PI))
-  }
-  const ellipseEnd = approach[approach.length - 1]
-
-  // ── Hyperbolic encounter ──
-  const vArrival = Math.sqrt(MU_EARTH_KM * (2 / MOON_SEMI_MAJOR_AXIS - 1 / sma))
-  const vMoon = Math.sqrt(MU_EARTH_KM / MOON_SEMI_MAJOR_AXIS)
-  const vInf = Math.max(Math.abs(vMoon - vArrival), 0.01)
-  const rPeri = R_MOON + closestApproachKm
-  const aHyp = MU_MOON / (vInf * vInf)
-  const eHyp = 1 + rPeri / aHyp
-  const pHyp = aHyp * (eHyp * eHyp - 1)
-
-  // ── θ_rot: align SOI entry point exactly to ellipse endpoint ──
-  // KEY FORMULA: use nuSOI (not nuMax) so gap = 0
-  const cosNuSOI = Math.max(-1, Math.min(1, (pHyp / MOON_SOI_KM - 1) / eHyp))
-  const nuSOI = Math.acos(cosNuSOI)
-  const arrivalAngle = Math.atan2(ellipseEnd.z, ellipseEnd.x - MOON_X_SCENE)
-  const thetaRot = arrivalAngle + nuSOI
-
-  // ── Segment B: Incoming hyperbola (−nuSOI → 0) ──
-  const nearN = Math.floor(numPoints * 0.3)
-  const nearMoon: Vec3[] = []
-  for (let i = 0; i <= nearN; i++) {
-    const nu = -nuSOI + (i / nearN) * nuSOI
-    const rH = keplerRadius(nu, pHyp, eHyp)
-    nearMoon.push(hyperbolaToScene(rH * Math.cos(nu), rH * Math.sin(nu), thetaRot))
-  }
-
-  // Closest approach at periapsis
-  const closestApproach = hyperbolaToScene(rPeri, 0, thetaRot)
-
-  // ── Segment C: Outgoing hyperbola (0 → +nuSOI) ──
-  const departN = numPoints - approachN - nearN
-  const departure: Vec3[] = []
-  for (let i = 0; i <= departN; i++) {
-    const nu = (i / departN) * nuSOI
-    const rH = keplerRadius(nu, pHyp, eHyp)
-    departure.push(hyperbolaToScene(rH * Math.cos(nu), rH * Math.sin(nu), thetaRot))
+  for (let i = pts.length - 1; i > caIdx; i--) {
+    const d = Math.sqrt((pts[i].x - MOON_X_SCENE) ** 2 + pts[i].z ** 2)
+    if (d < soiScene) { soiExitIdx = i; break }
   }
 
   return {
-    approach, nearMoon, departure, closestApproach,
-    closestApproachKm, earthReturn: null,
+    approach: pts.slice(0, soiEntryIdx + 1),
+    nearMoon: pts.slice(soiEntryIdx, soiExitIdx + 1),
+    departure: pts.slice(soiExitIdx),
+    closestApproach: pts[caIdx] || null,
+    closestApproachKm: result.closestApproachKm,
+    earthReturn: null,
   }
 }
 
 /**
  * Generate free-return figure-8 trajectory with phase-segmented output.
- * Patched conics: outbound ellipse → hyperbolic swing-by → return ellipse (rotated by deflection).
+ * RK4 numerical propagation — one continuous curve that returns to Earth.
  */
 export function generateFreeReturnTrajectory(
   departureAltKm: number,
   numPoints = 160,
 ): PhasedTrajectory {
   const closestApproachKm = 250
-  const { sma, e, p } = computeTransferElements(departureAltKm)
 
-  // ── SOI handoff ──
-  let nuLow = Math.PI * 0.5, nuHigh = Math.PI
-  for (let iter = 0; iter < 60; iter++) {
-    const nuMid = (nuLow + nuHigh) / 2
-    const r = keplerRadius(nuMid, p, e)
-    const pt = transferToScene(nuMid, r, Math.PI)
-    const dist = Math.sqrt((pt.x - MOON_X_SCENE) ** 2 + pt.z ** 2) * LUNAR_SCENE_SCALE
-    if (dist > MOON_SOI_KM) nuLow = nuMid
-    else nuHigh = nuMid
+  // Find velocity for 250 km CA
+  const vzAdj = findVzForCA(departureAltKm, closestApproachKm, 12)
+
+  // Propagate for ~12 days (enough for return)
+  const sampleEvery = Math.max(1, Math.floor(12 * 86400 / 30 / (numPoints * 1.5)))
+  const result = propagateTrajectory(departureAltKm, vzAdj, 12, 30, sampleEvery)
+  const pts = result.points
+  const caIdx = result.closestApproachIdx
+
+  // Split phases
+  const soiScene = MOON_SOI_KM / LUNAR_SCENE_SCALE
+
+  let soiEntryIdx = 0
+  let soiExitIdx = pts.length - 1
+
+  for (let i = 0; i < caIdx; i++) {
+    const d = Math.sqrt((pts[i].x - MOON_X_SCENE) ** 2 + pts[i].z ** 2)
+    if (d < soiScene) { soiEntryIdx = i; break }
   }
-  const nuHandoff = (nuLow + nuHigh) / 2
-
-  // ── Segment 1: Outbound ellipse → SOI ──
-  const outN = Math.floor(numPoints * 0.3)
-  const approach: Vec3[] = []
-  for (let i = 0; i <= outN; i++) {
-    const nu = (i / outN) * nuHandoff
-    approach.push(transferToScene(nu, keplerRadius(nu, p, e), Math.PI))
-  }
-  const ellipseEnd = approach[approach.length - 1]
-
-  // ── Hyperbola ──
-  const vArrival = Math.sqrt(MU_EARTH_KM * (2 / MOON_SEMI_MAJOR_AXIS - 1 / sma))
-  const vMoon = Math.sqrt(MU_EARTH_KM / MOON_SEMI_MAJOR_AXIS)
-  const vInf = Math.max(Math.abs(vMoon - vArrival), 0.01)
-  const rPeri = R_MOON + closestApproachKm
-  const aHyp = MU_MOON / (vInf * vInf)
-  const eHyp = 1 + rPeri / aHyp
-  const pHyp = aHyp * (eHyp * eHyp - 1)
-  const deflection = 2 * Math.asin(1 / eHyp)
-
-  const cosNuSOI = Math.max(-1, Math.min(1, (pHyp / MOON_SOI_KM - 1) / eHyp))
-  const nuSOI = Math.acos(cosNuSOI)
-  const arrivalAngle = Math.atan2(ellipseEnd.z, ellipseEnd.x - MOON_X_SCENE)
-  const thetaRot = arrivalAngle + nuSOI
-
-  // ── Segment 2: Full hyperbola ──
-  const swingN = Math.floor(numPoints * 0.25)
-  const nearMoon: Vec3[] = []
-  for (let i = 0; i <= swingN; i++) {
-    const nu = -nuSOI + (i / swingN) * 2 * nuSOI
-    const rH = keplerRadius(nu, pHyp, eHyp)
-    nearMoon.push(hyperbolaToScene(rH * Math.cos(nu), rH * Math.sin(nu), thetaRot))
-  }
-  const closestApproach = hyperbolaToScene(rPeri, 0, thetaRot)
-  const hypExit = nearMoon[nearMoon.length - 1]
-
-  // ── Segment 3: Return ellipse ──
-  // Find optimal returnOmega that minimizes gap between return SOI and hyp exit.
-  function findReturnSOI(omega: number): Vec3 {
-    let lo = Math.PI * 0.5, hi = Math.PI
-    for (let iter = 0; iter < 60; iter++) {
-      const m = (lo + hi) / 2
-      const r = keplerRadius(m, p, e)
-      const pt = transferToScene(m, r, omega)
-      const dist = Math.sqrt((pt.x - MOON_X_SCENE) ** 2 + pt.z ** 2) * LUNAR_SCENE_SCALE
-      if (dist > MOON_SOI_KM) lo = m
-      else hi = m
-    }
-    const nuRet = (lo + hi) / 2
-    return transferToScene(nuRet, keplerRadius(nuRet, p, e), omega)
+  for (let i = pts.length - 1; i > caIdx; i--) {
+    const d = Math.sqrt((pts[i].x - MOON_X_SCENE) ** 2 + pts[i].z ** 2)
+    if (d < soiScene) { soiExitIdx = i; break }
   }
 
-  // Coarse search for best returnOmega (50 steps over 2π)
-  let bestOmega = Math.PI, bestGap = Infinity
-  for (let step = 0; step < 50; step++) {
-    const omega = -Math.PI + (step / 50) * 2 * Math.PI
-    const retPt = findReturnSOI(omega)
-    const gap = Math.sqrt((retPt.x - hypExit.x) ** 2 + (retPt.z - hypExit.z) ** 2)
-    if (gap < bestGap) { bestGap = gap; bestOmega = omega }
-  }
-  // Fine search around best (±0.1 rad, 100 steps)
-  const coarseBest = bestOmega
-  for (let step = 0; step < 100; step++) {
-    const omega = coarseBest - 0.1 + (step / 100) * 0.2
-    const retPt = findReturnSOI(omega)
-    const gap = Math.sqrt((retPt.x - hypExit.x) ** 2 + (retPt.z - hypExit.z) ** 2)
-    if (gap < bestGap) { bestGap = gap; bestOmega = omega }
-  }
-  const returnOmega = bestOmega
-
-  // Find the return ellipse SOI nu
-  let retLo = Math.PI * 0.5, retHi = Math.PI
-  for (let iter = 0; iter < 60; iter++) {
-    const m = (retLo + retHi) / 2
-    const pt = transferToScene(m, keplerRadius(m, p, e), returnOmega)
-    const dist = Math.sqrt((pt.x - MOON_X_SCENE) ** 2 + pt.z ** 2) * LUNAR_SCENE_SCALE
-    if (dist > MOON_SOI_KM) retLo = m
-    else retHi = m
-  }
-  const retNuHandoff = (retLo + retHi) / 2
-
-  // Compute offset between hyp exit and return SOI point
-  const retSOIPt = transferToScene(retNuHandoff, keplerRadius(retNuHandoff, p, e), returnOmega)
-  const retOffX = hypExit.x - retSOIPt.x
-  const retOffZ = hypExit.z - retSOIPt.z
-
-  // Generate return path: sweep retNuHandoff → ~0.02 (Moon → Earth)
-  // Apply blended offset that fades from 100% at start to 0% at end
-  const retN = numPoints - outN - swingN
-  const departure: Vec3[] = []
-  for (let i = 0; i <= retN; i++) {
-    const nu = retNuHandoff * (1 - i / retN) + 0.02 * (i / retN)
-    const pt = transferToScene(nu, keplerRadius(nu, p, e), returnOmega)
-    const fade = 1 - (i / retN)  // 1 at Moon end, 0 at Earth end
-    departure.push({
-      x: pt.x + retOffX * fade,
-      y: 0,
-      z: pt.z + retOffZ * fade,
-    })
-  }
-
-  const earthReturn = departure[departure.length - 1]
+  // For free-return: the departure is everything after SOI exit (return to Earth)
+  const earthReturn = pts[pts.length - 1]
 
   return {
-    approach, nearMoon, departure, closestApproach,
-    closestApproachKm, earthReturn,
+    approach: pts.slice(0, soiEntryIdx + 1),
+    nearMoon: pts.slice(soiEntryIdx, soiExitIdx + 1),
+    departure: pts.slice(soiExitIdx),
+    closestApproach: pts[caIdx] || null,
+    closestApproachKm: result.closestApproachKm,
+    earthReturn,
   }
 }
 
