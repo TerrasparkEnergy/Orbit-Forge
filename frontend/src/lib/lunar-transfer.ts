@@ -250,9 +250,11 @@ export function generateLunarTransferArc(
   numPoints = 80,
 ): Array<{ x: number; y: number; z: number }> {
   const { p, e } = computeTransferElements(departureAltKm)
+  // Stop at 95% of apogee so the arc doesn't overshoot into the Moon / orbit ring
+  const nuEnd = Math.PI * 0.95
   const points: Array<{ x: number; y: number; z: number }> = []
   for (let i = 0; i <= numPoints; i++) {
-    const nu = (i / numPoints) * Math.PI
+    const nu = (i / numPoints) * nuEnd
     const r = keplerRadius(nu, p, e)
     points.push(transferToScene(nu, r, Math.PI))
   }
@@ -339,6 +341,16 @@ export function generateFlybyPath(
     departure.push(hyperbolaToScene(rH * Math.cos(nu) * hypScale, rH * Math.sin(nu) * hypScale, thetaRot))
   }
 
+  // ─── Offset-correct: force hyperbola start to match ellipse end ───
+  const ellipseEnd = approach[approach.length - 1]
+  const firstHyp = nearMoon[0]
+  const ox = ellipseEnd.x - firstHyp.x
+  const oz = ellipseEnd.z - firstHyp.z
+  for (const pt of nearMoon) { pt.x += ox; pt.z += oz }
+  for (const pt of departure) { pt.x += ox; pt.z += oz }
+  closestApproach.x += ox
+  closestApproach.z += oz
+
   return {
     approach,
     nearMoon,
@@ -410,6 +422,15 @@ export function generateFreeReturnTrajectory(
   const rCA = pHyp / (1 + eHyp)
   const closestApproach = hyperbolaToScene(rCA * hypScale, 0, thetaRot)
 
+  // ─── Offset-correct handoff 1: force hyperbola start to match ellipse end ───
+  const ellipseEnd = approach[approach.length - 1]
+  const firstHyp = nearMoon[0]
+  const ox1 = ellipseEnd.x - firstHyp.x
+  const oz1 = ellipseEnd.z - firstHyp.z
+  for (const pt of nearMoon) { pt.x += ox1; pt.z += oz1 }
+  closestApproach.x += ox1
+  closestApproach.z += oz1
+
   // ─── Segment 3: Return transfer ellipse (SOI → Earth) ───
   // Same orbital elements, apse line rotated by deflection angle → figure-8
   const returnOmega = Math.PI + deflection
@@ -435,6 +456,13 @@ export function generateFreeReturnTrajectory(
     const r = keplerRadius(nu, p, e)
     departure.push(transferToScene(nu, r, returnOmega))
   }
+
+  // ─── Offset-correct handoff 2: force return ellipse start to match hyperbola end ───
+  const hypEnd = nearMoon[nearMoon.length - 1]
+  const firstRet = departure[0]
+  const ox2 = hypEnd.x - firstRet.x
+  const oz2 = hypEnd.z - firstRet.z
+  for (const pt of departure) { pt.x += ox2; pt.z += oz2 }
 
   const earthReturn = departure[departure.length - 1]
 
