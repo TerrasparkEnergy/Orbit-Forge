@@ -384,27 +384,26 @@ export function generateFlybyPath(
     departure.push(hyperbolaToScene(rH * Math.cos(nu), rH * Math.sin(nu), thetaRot))
   }
 
-  // ─── Offset-correct: force hyperbola start to match ellipse end ───
-  const firstHyp = nearMoon[0]
-  const ox = ellipseEnd.x - firstHyp.x
-  const oz = ellipseEnd.z - firstHyp.z
-  console.log('[FLYBY] Offset: dx=', ox, 'dz=', oz, 'magnitude (km)=',
-    Math.sqrt(ox * ox + oz * oz) * LUNAR_SCENE_SCALE)
-  for (const pt of nearMoon) { pt.x += ox; pt.z += oz }
-  for (const pt of departure) { pt.x += ox; pt.z += oz }
-  closestApproach.x += ox
-  closestApproach.z += oz
-
-  // ─── Compute CA from actual rendered points ───
-  let actualMinDist = Infinity
-  for (const pt of nearMoon) {
-    const d = Math.sqrt((pt.x - MOON_X_SCENE) ** 2 + pt.z ** 2)
-    if (d < actualMinDist) actualMinDist = d
+  // ─── Bridge the SOI gap: straight line from ellipse endpoint to hyperbola start ───
+  const hypStart = nearMoon[0]
+  const bridgePoints = 5
+  for (let i = 1; i <= bridgePoints; i++) {
+    const t = i / (bridgePoints + 1)
+    approach.push({
+      x: ellipseEnd.x + t * (hypStart.x - ellipseEnd.x),
+      y: 0,
+      z: ellipseEnd.z + t * (hypStart.z - ellipseEnd.z),
+    })
   }
-  const computedCAKm = Math.max(0, actualMinDist * LUNAR_SCENE_SCALE - R_MOON)
+
+  // ─── Compute CA from periapsis point (no offset — hyperbola is correctly positioned) ───
+  const caDistScene = Math.sqrt(
+    (closestApproach.x - MOON_X_SCENE) ** 2 + closestApproach.z ** 2
+  )
+  const computedCAKm = Math.max(0, caDistScene * LUNAR_SCENE_SCALE - R_MOON)
   console.log('[FLYBY] Input CA (km)=', closestApproachKm, 'Computed CA (km)=', computedCAKm)
   console.log('[FLYBY] CA point (scene): x=', closestApproach.x, 'z=', closestApproach.z,
-    'dist from Moon=', Math.sqrt((closestApproach.x - MOON_X_SCENE) ** 2 + closestApproach.z ** 2))
+    'dist from Moon=', caDistScene)
 
   return {
     approach,
@@ -481,14 +480,17 @@ export function generateFreeReturnTrajectory(
   const rCA = pHyp / (1 + eHyp)
   const closestApproach = hyperbolaToScene(rCA, 0, thetaRot)
 
-  // ─── Offset-correct handoff 1: force hyperbola start to match ellipse end ───
-  const firstHyp = nearMoon[0]
-  const ox1 = ellipseEnd.x - firstHyp.x
-  const oz1 = ellipseEnd.z - firstHyp.z
-  console.log('[FREE-RET] Handoff 1 offset (km)=', Math.sqrt(ox1 * ox1 + oz1 * oz1) * LUNAR_SCENE_SCALE)
-  for (const pt of nearMoon) { pt.x += ox1; pt.z += oz1 }
-  closestApproach.x += ox1
-  closestApproach.z += oz1
+  // ─── Bridge handoff 1: straight line from ellipse endpoint to hyperbola start ───
+  const hypStart = nearMoon[0]
+  const bridge1Points = 5
+  for (let i = 1; i <= bridge1Points; i++) {
+    const t = i / (bridge1Points + 1)
+    approach.push({
+      x: ellipseEnd.x + t * (hypStart.x - ellipseEnd.x),
+      y: 0,
+      z: ellipseEnd.z + t * (hypStart.z - ellipseEnd.z),
+    })
+  }
 
   // ─── Segment 3: Return transfer ellipse (SOI → Earth) ───
   // Same orbital elements, apse line rotated by deflection angle → figure-8
@@ -516,23 +518,30 @@ export function generateFreeReturnTrajectory(
     departure.push(transferToScene(nu, r, returnOmega))
   }
 
-  // ─── Offset-correct handoff 2: force return ellipse start to match hyperbola end ───
+  // ─── Bridge handoff 2: straight line from hyperbola end to return ellipse start ───
   const hypEnd = nearMoon[nearMoon.length - 1]
-  const firstRet = departure[0]
-  const ox2 = hypEnd.x - firstRet.x
-  const oz2 = hypEnd.z - firstRet.z
-  console.log('[FREE-RET] Handoff 2 offset (km)=', Math.sqrt(ox2 * ox2 + oz2 * oz2) * LUNAR_SCENE_SCALE)
-  for (const pt of departure) { pt.x += ox2; pt.z += oz2 }
-
-  // ─── Compute CA from actual rendered points ───
-  let actualMinDist = Infinity
-  for (const pt of nearMoon) {
-    const d = Math.sqrt((pt.x - MOON_X_SCENE) ** 2 + pt.z ** 2)
-    if (d < actualMinDist) actualMinDist = d
+  const returnStart = departure[0]
+  const bridge2Points = 5
+  const bridge2: Vec3[] = []
+  for (let i = 1; i <= bridge2Points; i++) {
+    const t = i / (bridge2Points + 1)
+    bridge2.push({
+      x: hypEnd.x + t * (returnStart.x - hypEnd.x),
+      y: 0,
+      z: hypEnd.z + t * (returnStart.z - hypEnd.z),
+    })
   }
-  const computedCAKm = Math.max(0, actualMinDist * LUNAR_SCENE_SCALE - R_MOON)
+  // Append bridge to nearMoon so it renders as part of the near-Moon segment
+  nearMoon.push(...bridge2)
+
+  // ─── Compute CA from periapsis point (no offset — hyperbola is correctly positioned) ───
+  const caDistScene = Math.sqrt(
+    (closestApproach.x - MOON_X_SCENE) ** 2 + closestApproach.z ** 2
+  )
+  const computedCAKm = Math.max(0, caDistScene * LUNAR_SCENE_SCALE - R_MOON)
   console.log('[FREE-RET] Input CA (km)=', closestApproachKm, 'Computed CA (km)=', computedCAKm)
-  console.log('[FREE-RET] CA point (scene): x=', closestApproach.x, 'z=', closestApproach.z)
+  console.log('[FREE-RET] CA point (scene): x=', closestApproach.x, 'z=', closestApproach.z,
+    'dist from Moon=', caDistScene)
 
   const earthReturn = departure[departure.length - 1]
 
