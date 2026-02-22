@@ -256,6 +256,7 @@ function rk4Step(
 /**
  * Propagate a trajectory from LEO departure under Earth+Moon gravity.
  * Returns scene-coordinate points sampled at regular intervals.
+ * Tracks closest approach at every integration step for accuracy.
  */
 function propagateTrajectory(
   departureAltKm: number,
@@ -263,7 +264,8 @@ function propagateTrajectory(
   maxDays: number,
   dt = 30,
   sampleInterval = 200,
-): { points: Vec3[]; closestApproachKm: number; closestApproachIdx: number } {
+  stopOnEarthReturn = false,
+): { points: Vec3[]; closestApproachKm: number; closestApproachIdx: number; closestApproachPoint: Vec3 } {
   const r0 = R_EARTH_EQUATORIAL + departureAltKm
   const sma = (r0 + MOON_SEMI_MAJOR_AXIS) / 2
   const vTLI = Math.sqrt(MU_EARTH_KM * (2 / r0 - 1 / sma))
@@ -276,21 +278,31 @@ function propagateTrajectory(
   const points: Vec3[] = []
   let closestMoonDist = Infinity
   let closestApproachIdx = 0
+  let closestApproachPoint: Vec3 = { x: 0, y: 0, z: 0 }
 
   const maxSteps = Math.floor(maxDays * 86400 / dt)
   for (let step = 0; step <= maxSteps; step++) {
     const rMoon = Math.sqrt((x - MOON_SEMI_MAJOR_AXIS) ** 2 + z * z)
 
-    if (step % sampleInterval === 0) {
-      points.push({ x: x / LUNAR_SCENE_SCALE, y: 0, z: z / LUNAR_SCENE_SCALE })
-      if (rMoon < closestMoonDist) {
-        closestMoonDist = rMoon
-        closestApproachIdx = points.length - 1
-      }
+    // Track closest approach at EVERY step (not just sample points)
+    if (rMoon < closestMoonDist) {
+      closestMoonDist = rMoon
+      closestApproachPoint = { x: x / LUNAR_SCENE_SCALE, y: 0, z: z / LUNAR_SCENE_SCALE }
+      closestApproachIdx = points.length
     }
 
-    // Stop if crashed
+    // Record output point at sample interval
+    if (step % sampleInterval === 0) {
+      points.push({ x: x / LUNAR_SCENE_SCALE, y: 0, z: z / LUNAR_SCENE_SCALE })
+    }
+
     if (rMoon < R_MOON || Math.sqrt(x * x + z * z) < R_EARTH_EQUATORIAL) break
+
+    // Stop on Earth return (for free-return trajectories)
+    if (stopOnEarthReturn && step > maxSteps / 3) {
+      const rEarth = Math.sqrt(x * x + z * z)
+      if (rEarth < (R_EARTH_EQUATORIAL + departureAltKm * 3)) break
+    }
 
     const next = rk4Step(x, z, vx, vz, dt)
     x = next.x; z = next.z; vx = next.vx; vz = next.vz
@@ -299,23 +311,31 @@ function propagateTrajectory(
   return {
     points,
     closestApproachKm: Math.max(0, closestMoonDist - R_MOON),
-    closestApproachIdx,
+    closestApproachIdx: Math.min(closestApproachIdx, points.length - 1),
+    closestApproachPoint,
   }
 }
 
 /**
  * Find the velocity adjustment that achieves a target closest approach.
  * Uses bisection search on the vz offset from Hohmann velocity.
+ * More negative vzAdj = faster TLI = closer approach to Moon.
  */
 function findVzForCA(departureAltKm: number, targetCAKm: number, maxDays: number): number {
-  let lo = -0.01  // 10 m/s faster (closer CA)
-  let hi = 0.01   // 10 m/s slower (farther CA)
+  // Search only in the negative range (faster than Hohmann)
+  let lo = -0.05   // -50 m/s (very close approach)
+  let hi = 0        // 0 m/s (Hohmann, ~2384 km CA)
 
-  for (let iter = 0; iter < 30; iter++) {
+  for (let iter = 0; iter < 40; iter++) {
     const mid = (lo + hi) / 2
-    const result = propagateTrajectory(departureAltKm, mid, maxDays, 30, 500)
-    if (result.closestApproachKm < targetCAKm) hi = mid
-    else lo = mid
+    const result = propagateTrajectory(departureAltKm, mid, maxDays, 30, 1)
+    if (result.closestApproachKm < targetCAKm) {
+      // Too close → need less speed → make vzAdj less negative
+      lo = mid
+    } else {
+      // Too far → need more speed → make vzAdj more negative
+      hi = mid
+    }
   }
   return (lo + hi) / 2
 }
@@ -327,15 +347,19 @@ function findVzForCA(departureAltKm: number, targetCAKm: number, maxDays: number
  */
 export function generateLunarTransferArc(
   departureAltKm: number,
-  _targetOrbitAltKm = 100,
+  targetOrbitAltKm = 100,
   numPoints = 120,
 ): Vec3[] {
   // Propagate with Hohmann velocity (no CA targeting needed — just reach Moon)
   const result = propagateTrajectory(departureAltKm, 0, 5, 30,
     Math.max(1, Math.floor(5 * 86400 / 30 / numPoints)))
 
-  // Trim: stop when within visual Moon radius * 2
-  const stopDist = VISUAL_MOON_R * 2
+  // Stop when within the visual orbit ring radius
+  // The orbit ring is drawn at the same enlarged scale as the Moon sphere
+  const visualScale = VISUAL_MOON_R / (R_MOON / LUNAR_SCENE_SCALE)
+  const orbitRingScene = (R_MOON + targetOrbitAltKm) / LUNAR_SCENE_SCALE * visualScale
+  const stopDist = orbitRingScene * 1.05  // stop just outside the ring
+
   let endIdx = result.points.length
   for (let i = Math.floor(result.points.length / 2); i < result.points.length; i++) {
     const dx = result.points[i].x - MOON_X_SCENE
@@ -400,7 +424,7 @@ export function generateFlybyPath(
     approach: pts.slice(0, soiEntryIdx + 1),
     nearMoon: pts.slice(soiEntryIdx, soiExitIdx + 1),
     departure: pts.slice(soiExitIdx),
-    closestApproach: pts[caIdx] || null,
+    closestApproach: result.closestApproachPoint,
     closestApproachKm: result.closestApproachKm,
     earthReturn: null,
   }
@@ -419,9 +443,9 @@ export function generateFreeReturnTrajectory(
   // Find velocity for 250 km CA
   const vzAdj = findVzForCA(departureAltKm, closestApproachKm, 12)
 
-  // Propagate for ~12 days (enough for return)
+  // Propagate for ~12 days (enough for return), stop when returning near Earth
   const sampleEvery = Math.max(1, Math.floor(12 * 86400 / 30 / (numPoints * 1.5)))
-  const result = propagateTrajectory(departureAltKm, vzAdj, 12, 30, sampleEvery)
+  const result = propagateTrajectory(departureAltKm, vzAdj, 12, 30, sampleEvery, true)
   const pts = result.points
   const caIdx = result.closestApproachIdx
 
@@ -447,7 +471,7 @@ export function generateFreeReturnTrajectory(
     approach: pts.slice(0, soiEntryIdx + 1),
     nearMoon: pts.slice(soiEntryIdx, soiExitIdx + 1),
     departure: pts.slice(soiExitIdx),
-    closestApproach: pts[caIdx] || null,
+    closestApproach: result.closestApproachPoint,
     closestApproachKm: result.closestApproachKm,
     earthReturn,
   }
