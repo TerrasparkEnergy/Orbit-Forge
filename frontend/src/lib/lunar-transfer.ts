@@ -251,7 +251,7 @@ export function generateLunarTransferArc(
 ): Array<{ x: number; y: number; z: number }> {
   const { p, e } = computeTransferElements(departureAltKm)
   // Stop just short of apogee so the arc doesn't overshoot into the Moon / orbit ring
-  const nuEnd = Math.PI * 0.97
+  const nuEnd = Math.PI * 0.98
   const points: Array<{ x: number; y: number; z: number }> = []
   for (let i = 0; i <= numPoints; i++) {
     const nu = (i / numPoints) * nuEnd
@@ -317,11 +317,18 @@ export function generateFlybyPath(
   console.log('[FLYBY] rPeri (km)=', rPeri, 'deflection (deg)=', 2 * Math.asin(1 / eHyp) * 180 / Math.PI)
   console.log('[FLYBY] nuMax (deg)=', nuMax * 180 / Math.PI)
 
-  // ─── Velocity alignment: rotate hyperbola to match transfer arrival direction ───
-  const vInAngle = Math.atan2(-(e + Math.cos(nuHandoff)), Math.sin(nuHandoff))
-  const asymInAngle = Math.atan2(-Math.sin(nuMax), Math.cos(nuMax))
-  const thetaRot = vInAngle - asymInAngle
-  console.log('[FLYBY] thetaRot (deg)=', thetaRot * 180 / Math.PI)
+  // ─── Position alignment: rotate hyperbola so SOI entry matches ellipse endpoint ───
+  // Direction from Moon center to the ellipse endpoint (where spacecraft enters SOI)
+  const dx = ellipseEnd.x - MOON_X_SCENE
+  const dz = ellipseEnd.z  // Moon is at z=0
+  const arrivalAngle = Math.atan2(dz, dx)  // angle of arrival direction from Moon
+
+  // Incoming asymptote angle in the unrotated hyperbola perifocal frame
+  const incomingAsymAngle = Math.PI - nuMax
+
+  // Rotate so incoming asymptote aligns with arrival direction
+  const thetaRot = arrivalAngle - incomingAsymAngle
+  console.log('[FLYBY] NEW thetaRot (deg)=', thetaRot * 180 / Math.PI)
 
   // ─── Hyperbola ν-range: start/end at SOI boundary ───
   const cosNuSOI = Math.max(-1, Math.min(1, (pHyp / MOON_SOI_KM - 1) / eHyp))
@@ -421,11 +428,13 @@ export function generateFreeReturnTrajectory(
   const deflection = 2 * Math.asin(1 / eHyp)
   console.log('[FREE-RET] vInf=', vInf, 'e_hyp=', eHyp, 'deflection (deg)=', deflection * 180 / Math.PI)
 
-  // ─── Velocity alignment ───
-  const vInAngle = Math.atan2(-(e + Math.cos(nuHandoff)), Math.sin(nuHandoff))
-  const asymInAngle = Math.atan2(-Math.sin(nuMax), Math.cos(nuMax))
-  const thetaRot = vInAngle - asymInAngle
-  console.log('[FREE-RET] thetaRot (deg)=', thetaRot * 180 / Math.PI)
+  // ─── Position alignment: rotate hyperbola so SOI entry matches ellipse endpoint ───
+  const dx = ellipseEnd.x - MOON_X_SCENE
+  const dz = ellipseEnd.z
+  const arrivalAngle = Math.atan2(dz, dx)
+  const incomingAsymAngle = Math.PI - nuMax
+  const thetaRot = arrivalAngle - incomingAsymAngle
+  console.log('[FREE-RET] NEW thetaRot (deg)=', thetaRot * 180 / Math.PI)
 
   // ─── Hyperbola ν-range at SOI boundary ───
   const cosNuSOI = Math.max(-1, Math.min(1, (pHyp / MOON_SOI_KM - 1) / eHyp))
