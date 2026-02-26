@@ -11,6 +11,7 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+    secrets: inherit
     with:
       confidence_threshold: 85
       auto_merge_strategy: squash
