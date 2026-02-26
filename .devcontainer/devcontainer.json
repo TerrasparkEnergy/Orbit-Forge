@@ -1,0 +1,78 @@
+{
+  "name": "Orbit Forge",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".",
+    "args": {
+      "TZ": "${localEnv:TZ:UTC}"
+    }
+  },
+
+  // Network capabilities required for firewall (iptables)
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW"
+  ],
+
+  // Preserve monorepo hierarchy for parent CLAUDE.md discovery
+  "workspaceMount": "source=${localWorkspaceFolder}/..,target=/workspaces/terraspark,type=bind,consistency=cached",
+  "workspaceFolder": "/workspaces/terraspark/Orbit-Forge",
+
+  // Claude Code authentication
+  "containerEnv": {
+    "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN}",
+    "HOST_HOME": "${localEnv:HOME}"
+  },
+
+  // Mount host Claude environment + persistent command history
+  "mounts": [
+    "source=${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,consistency=cached",
+    "source=orbit-forge-bashhistory-${devcontainerId},target=/commandhistory,type=volume"
+  ],
+
+  // Features
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  // VS Code extensions
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // Always included
+        "anthropic.claude-code",
+        "usernamehw.errorlens",
+        "mikestead.dotenv",
+        "eamodio.gitlens",
+
+        // TypeScript
+        "yoavbls.pretty-ts-errors",
+        "MylesMurphy.prettify-ts",
+        "mattpocock.ts-error-translator",
+
+        // React
+        "dsznajder.es7-react-js-snippets",
+
+        // Tailwind CSS
+        "bradlc.vscode-tailwindcss"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "editor.formatOnSave": true
+      }
+    }
+  },
+
+  // Initialize firewall on container start
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
+
+  // Write onboarding bypass, create portable symlink for plugin path resolution, then install
+  // npm install runs in the frontend/ subdirectory where package.json lives
+  "postCreateCommand": "bash -c 'echo \"{\\\"hasCompletedOnboarding\\\": true}\" > /home/node/.claude.json && sudo mkdir -p \"$HOST_HOME\" && sudo ln -sfn /home/node/.claude \"$HOST_HOME/.claude\" && cd frontend && npm install'",
+
+  // Wait for firewall to initialize before allowing interaction
+  "waitFor": "postStartCommand",
+
+  // Run as non-root user
+  "remoteUser": "node"
+}
