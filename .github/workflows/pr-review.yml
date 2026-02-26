@@ -6,7 +6,7 @@ on:
 
 jobs:
   review:
-    uses: TerrasparkEnergy/.github/.github/workflows/copilot-review-automerge.yml@main
+    uses: TerrasparkEnergy/.github/.github/workflows/claude-review-automerge.yml@main
     permissions:
       contents: write
       pull-requests: write
