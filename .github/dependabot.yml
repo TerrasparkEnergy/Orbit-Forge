@@ -19,3 +19,5 @@ updates:
       - "dependencies"
     commit-message:
       prefix: "chore(ci):"
+    ignore:
+      - dependency-name: "TerrasparkEnergy/.github"
