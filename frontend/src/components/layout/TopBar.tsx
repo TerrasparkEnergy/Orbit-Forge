@@ -68,6 +68,19 @@ export default function TopBar({ onSaveLoad }: TopBarProps) {
 
       {/* Right side */}
       <div className="flex items-center gap-4">
+        <a
+          href="#validation"
+          className="px-3 py-1 rounded text-[11px] font-sans text-[var(--text-secondary)] border border-white/10 hover:border-accent-green/30 hover:text-accent-green transition-all inline-flex items-center gap-1.5 no-underline"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-accent-green inline-block" />
+          Validated
+        </a>
+        <a
+          href="#guide"
+          className="px-3 py-1 rounded text-[11px] font-sans text-[var(--text-secondary)] border border-white/10 hover:border-accent-blue/30 hover:text-accent-blue transition-all no-underline"
+        >
+          Guide
+        </a>
         <button
           onClick={handleReport}
           disabled={reportStatus === 'generating'}

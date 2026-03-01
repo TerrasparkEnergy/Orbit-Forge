@@ -89,26 +89,54 @@ export default function LandingPage() {
           >
             North Star AI Solutions
           </span>
-          <button
-            onClick={enterApp}
-            className="px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
-            style={{
-              background: 'rgba(59, 130, 246, 0.15)',
-              color: '#3B82F6',
-              border: '1px solid rgba(59, 130, 246, 0.3)',
-              backdropFilter: 'blur(8px)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.25)'
-              e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)'
-              e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.3)'
-            }}
-          >
-            Open App
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <a
+              href="#guide"
+              className="text-sm transition-all duration-200"
+              style={{
+                color: '#6B7280',
+                textDecoration: 'none',
+                fontFamily: "'IBM Plex Sans', sans-serif",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#3B82F6')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#6B7280')}
+            >
+              User Guide
+            </a>
+            <a
+              href="#validation"
+              className="text-sm transition-all duration-200"
+              style={{
+                color: '#6B7280',
+                textDecoration: 'none',
+                fontFamily: "'IBM Plex Sans', sans-serif",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#10B981')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#6B7280')}
+            >
+              Validated against NASA/ESA data &rarr;
+            </a>
+            <button
+              onClick={enterApp}
+              className="px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200"
+              style={{
+                background: 'rgba(59, 130, 246, 0.15)',
+                color: '#3B82F6',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                backdropFilter: 'blur(8px)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.25)'
+                e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.5)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)'
+                e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.3)'
+              }}
+            >
+              Open App
+            </button>
+          </div>
         </div>
 
         {/* Hero content */}
@@ -180,12 +208,62 @@ export default function LandingPage() {
             <span style={{ fontSize: '14px', color: '#9CA3AF' }}>
               Free — No signup required
             </span>
+            <a
+              href="#validation"
+              className="transition-all duration-200"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                marginTop: '8px',
+                fontSize: '13px',
+                fontFamily: "'IBM Plex Sans', sans-serif",
+                color: '#9CA3AF',
+                textDecoration: 'none',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#10B981')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#9CA3AF')}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+                <circle cx="7" cy="7" r="6" stroke="#10B981" strokeWidth="1.5" />
+                <path d="M4.5 7l1.8 1.8L9.5 5.5" stroke="#10B981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              21/21 Tests Validated Against NASA/ESA Mission Data
+            </a>
           </div>
+        </div>
+
+        {/* Mobile-only desktop note */}
+        <div
+          className="mobile-only-note absolute z-10"
+          style={{
+            bottom: '48px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'none',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 20px',
+            background: 'rgba(17, 24, 39, 0.85)',
+            border: '1px solid rgba(59, 130, 246, 0.15)',
+            borderRadius: '8px',
+            backdropFilter: 'blur(8px)',
+            maxWidth: '340px',
+            width: 'calc(100% - 48px)',
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="1.5" style={{ flexShrink: 0 }}>
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <path d="M8 21h8M12 17v4" />
+          </svg>
+          <span style={{ fontSize: '12px', color: '#9CA3AF', lineHeight: 1.5 }}>
+            Mission planning tools are optimized for desktop. Visit on a computer to start designing.
+          </span>
         </div>
 
         {/* Scroll indicator */}
         <div
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 pulse-glow z-10"
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 pulse-glow z-10 scroll-indicator"
           style={{ color: '#9CA3AF' }}
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

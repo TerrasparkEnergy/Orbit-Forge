@@ -1,8 +1,6 @@
 import { Suspense, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-// Bloom disabled for performance — can re-enable later
-// import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import type { OrbitControls as OrbitControlsType } from 'three-stdlib'
 import Earth from './Earth'
 import Atmosphere from './Atmosphere'
@@ -14,6 +12,11 @@ import ApsisMarkers from './ApsisMarkers'
 import GroundTrack from './GroundTrack'
 import CoordinateGrid from './CoordinateGrid'
 import GroundStationMarkers from './GroundStationMarker'
+import StationVisibilityCones from './StationVisibilityCone'
+import PayloadFootprint from './PayloadFootprint'
+import SwathCorridor from './SwathCorridor'
+import SimulationClock from './SimulationClock'
+import { usePropagationSync } from '@/hooks/usePropagationSync'
 
 function AdaptiveControls() {
   const controlsRef = useRef<OrbitControlsType>(null)
@@ -51,8 +54,11 @@ function AdaptiveControls() {
 }
 
 export default function EarthScene() {
+  usePropagationSync()
+
   return (
     <>
+      <SimulationClock />
       <SunLight />
 
       <Suspense fallback={null}>
@@ -66,18 +72,17 @@ export default function EarthScene() {
       <GroundTrack />
       <GroundStationMarkers />
 
-      {/* Orbit visualization */}
+      {/* Orbit visualization — direct siblings, no wrapper */}
       <OrbitLine />
       <SatelliteMarker />
       <ApsisMarkers />
 
-      <AdaptiveControls />
+      {/* Visibility & footprint overlays — read their own toggle state */}
+      <StationVisibilityCones />
+      <PayloadFootprint />
+      <SwathCorridor />
 
-      {/* Bloom disabled for performance — re-enable when needed:
-      <EffectComposer>
-        <Bloom intensity={0.4} luminanceThreshold={0.5} luminanceSmoothing={0.9} mipmapBlur />
-      </EffectComposer>
-      */}
+      <AdaptiveControls />
     </>
   )
 }

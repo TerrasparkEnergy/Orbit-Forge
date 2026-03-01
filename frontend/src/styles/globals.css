@@ -60,8 +60,10 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Landing page needs scrolling */
-#root:has(.landing-page) {
+/* Landing page and validation page need scrolling */
+#root:has(.landing-page),
+#root:has(.validation-page),
+#root:has(.guide-page) {
   overflow: auto;
 }
 
@@ -160,4 +162,14 @@ input[type="number"] {
 
 .loading-glow {
   animation: loading-glow 1.5s ease-in-out infinite;
+}
+
+/* Mobile: show desktop notes, hide scroll indicator */
+@media (max-width: 1023px) {
+  .mobile-only-note {
+    display: flex !important;
+  }
+  .scroll-indicator {
+    display: none !important;
+  }
 }

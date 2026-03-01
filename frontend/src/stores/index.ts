@@ -11,8 +11,12 @@ import { RadiationSlice, createRadiationSlice } from './radiation-slice'
 import { ComparisonSlice, createComparisonSlice } from './comparison-slice'
 import { PayloadSlice, createPayloadSlice } from './payload-slice'
 import { BeyondLeoSlice, createBeyondLeoSlice } from './beyond-leo-slice'
+import { ArchitectSlice, createArchitectSlice } from './architect-slice'
+import { SimulationSlice, createSimulationSlice } from './simulation-slice'
+import { PropagationSlice, createPropagationSlice } from './propagation-slice'
+import { CommSlice, createCommSlice } from './comm-slice'
 
-export type AppStore = UISlice & MissionSlice & OrbitSlice & GroundSlice & PowerSlice & ConstellationSlice & DeltaVSlice & RadiationSlice & ComparisonSlice & PayloadSlice & BeyondLeoSlice
+export type AppStore = UISlice & MissionSlice & OrbitSlice & GroundSlice & PowerSlice & ConstellationSlice & DeltaVSlice & RadiationSlice & ComparisonSlice & PayloadSlice & BeyondLeoSlice & ArchitectSlice & SimulationSlice & PropagationSlice & CommSlice
 
 export const useStore = create<AppStore>()(
   devtools(
@@ -29,10 +33,14 @@ export const useStore = create<AppStore>()(
         ...createComparisonSlice(...a),
         ...createPayloadSlice(...a),
         ...createBeyondLeoSlice(...a),
+        ...createArchitectSlice(...a),
+        ...createSimulationSlice(...a),
+        ...createPropagationSlice(...a),
+        ...createCommSlice(...a),
       }),
       {
         name: 'orbitforge-autosave',
-        version: 12,
+        version: 17,
         migrate: (persisted: any, version: number) => {
           if (version < 8) {
             const { groundStations, ...rest } = persisted || {}
@@ -57,6 +65,33 @@ export const useStore = create<AppStore>()(
                 },
               }
             }
+          }
+          // v14: Reset ground stations to defaults (stale localStorage may have truncated list)
+          if (version < 14) {
+            if (persisted) {
+              const { groundStations: _gs, ...rest } = persisted
+              persisted = rest
+            }
+          }
+          // v15: Add closestApproachAltKm to lunar params
+          if (version < 15) {
+            if (persisted?.beyondLeo?.lunarParams && persisted.beyondLeo.lunarParams.closestApproachAltKm == null) {
+              persisted = {
+                ...persisted,
+                beyondLeo: {
+                  ...persisted.beyondLeo,
+                  lunarParams: { ...persisted.beyondLeo.lunarParams, closestApproachAltKm: 250 },
+                },
+              }
+            }
+          }
+          // v16: Propagation slice fields are new; defaults applied by slice initializer
+          if (version < 16) {
+            // No migration needed — new slice fields get defaults
+          }
+          // v17: Comm slice fields are new; defaults applied by slice initializer
+          if (version < 17) {
+            // No migration needed — new slice fields get defaults
           }
           return persisted as any
         },
@@ -97,6 +132,11 @@ export const useStore = create<AppStore>()(
           payloadSAR: state.payloadSAR,
           payloadSATCOM: state.payloadSATCOM,
           beyondLeo: state.beyondLeo,
+          propagationMode: state.propagationMode,
+          perturbationConfig: state.perturbationConfig,
+          spacecraftProps: state.spacecraftProps,
+          numOrbits: state.numOrbits,
+          commConfig: state.commConfig,
           mission: {
             ...state.mission,
             epoch: state.mission.epoch instanceof Date

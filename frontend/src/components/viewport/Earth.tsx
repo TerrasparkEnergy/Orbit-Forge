@@ -1,5 +1,5 @@
-import { useRef, useMemo, useState } from 'react'
-import { useFrame, useLoader } from '@react-three/fiber'
+import { useRef, useMemo, useState, useEffect } from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { shaderMaterial } from '@react-three/drei'
 import { extend } from '@react-three/fiber'
@@ -82,7 +82,7 @@ declare global {
   }
 }
 
-// Procedural fallback if textures aren't available
+// Procedural fallback textures for when image files are unavailable (gitignored)
 function createProceduralTexture(color: string, size = 64): THREE.Texture {
   const canvas = document.createElement('canvas')
   canvas.width = size
@@ -95,52 +95,58 @@ function createProceduralTexture(color: string, size = 64): THREE.Texture {
   return tex
 }
 
+function createFallbackTextures() {
+  return {
+    day: createProceduralTexture('#1a4d8f', 256),
+    night: createProceduralTexture('#020408', 256),
+    clouds: createProceduralTexture('#ffffff', 64),
+    normal: createProceduralTexture('#8080ff', 64),
+    specular: createProceduralTexture('#333333', 64),
+  }
+}
+
+// Color space config per texture key
+const COLOR_SPACE: Record<string, THREE.ColorSpace> = {
+  day: THREE.SRGBColorSpace,
+  night: THREE.SRGBColorSpace,
+  clouds: THREE.SRGBColorSpace,
+  normal: THREE.LinearSRGBColorSpace,
+  specular: THREE.LinearSRGBColorSpace,
+}
+
+const TEXTURE_URLS: Record<string, string> = {
+  day: '/textures/earth_daymap_2k.jpg',
+  night: '/textures/earth_nightmap_2k.jpg',
+  clouds: '/textures/earth_clouds_2k.jpg',
+  normal: '/textures/earth_normal_2k.jpg',
+  specular: '/textures/earth_specular_2k.jpg',
+}
+
 export default function Earth() {
   const earthRef = useRef<THREE.Mesh>(null)
   const cloudsRef = useRef<THREE.Mesh>(null)
-  const [texturesLoaded, setTexturesLoaded] = useState(false)
 
-  // Try loading textures, fall back to procedural
-  const textures = useMemo(() => {
+  // Start with procedural fallback textures — swap in real ones when they load
+  const [textures, setTextures] = useState(createFallbackTextures)
+
+  useEffect(() => {
     const loader = new THREE.TextureLoader()
-    const fallback = {
-      day: createProceduralTexture('#1a4d8f', 256),
-      night: createProceduralTexture('#020408', 256),
-      clouds: createProceduralTexture('#ffffff', 64),
-      normal: createProceduralTexture('#8080ff', 64),
-      specular: createProceduralTexture('#333333', 64),
+    let cancelled = false
+
+    // Load each texture independently — failures keep the fallback for that slot
+    for (const [key, url] of Object.entries(TEXTURE_URLS)) {
+      loader.loadAsync(url).then((tex) => {
+        if (cancelled) return
+        tex.colorSpace = COLOR_SPACE[key]
+        tex.anisotropy = 8
+        tex.needsUpdate = true
+        setTextures((prev) => ({ ...prev, [key]: tex }))
+      }).catch(() => {
+        // 404 or load error — keep the procedural fallback for this texture
+      })
     }
 
-    const loaded: typeof fallback = { ...fallback }
-    let count = 0
-    const total = 5
-
-    const onLoad = () => {
-      count++
-      if (count === total) setTexturesLoaded(true)
-    }
-    const onError = () => {
-      count++
-      if (count === total) setTexturesLoaded(true)
-    }
-
-    try {
-      loaded.day = loader.load('/textures/earth_daymap_2k.jpg', onLoad, undefined, onError)
-      loaded.night = loader.load('/textures/earth_nightmap_2k.jpg', onLoad, undefined, onError)
-      loaded.clouds = loader.load('/textures/earth_clouds_2k.jpg', onLoad, undefined, onError)
-      loaded.normal = loader.load('/textures/earth_normal_2k.jpg', onLoad, undefined, onError)
-      loaded.specular = loader.load('/textures/earth_specular_2k.jpg', onLoad, undefined, onError)
-    } catch {
-      setTexturesLoaded(true)
-    }
-
-    // Set texture properties
-    Object.values(loaded).forEach((tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace
-      tex.anisotropy = 8
-    })
-
-    return loaded
+    return () => { cancelled = true }
   }, [])
 
   // Compute sun direction from current date

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useStore } from '@/stores'
 import { ModuleId } from '@/types'
 import LandingPage from '@/pages/LandingPage'
+import ValidationPage from '@/pages/ValidationPage'
+import GuidePage from '@/pages/GuidePage'
 import TopBar from '@/components/layout/TopBar'
 import LeftPanel from '@/components/layout/LeftPanel'
 import RightPanel from '@/components/layout/RightPanel'
@@ -39,6 +41,7 @@ import BeyondLeoChart from '@/modules/beyond-leo/BeyondLeoChart'
 import ComparisonPanel from '@/modules/comparison/ComparisonPanel'
 import ComparisonDisplay from '@/modules/comparison/ComparisonDisplay'
 import ComparisonChart from '@/modules/comparison/ComparisonChart'
+import MissionArchitectView from '@/modules/mission-architect/MissionArchitectView'
 import SaveLoadDialog from '@/components/ui/SaveLoadDialog'
 import MobileOverlay from '@/components/ui/MobileOverlay'
 
@@ -139,45 +142,59 @@ function BottomPanelContent() {
 }
 
 export default function App() {
-  const [view, setView] = useState<'landing' | 'app'>(() =>
-    window.location.hash === '#app' ? 'app' : 'landing'
-  )
+  const [view, setView] = useState<'landing' | 'app' | 'validation' | 'guide'>(() => {
+    const hash = window.location.hash
+    if (hash === '#app') return 'app'
+    if (hash === '#validation') return 'validation'
+    if (hash === '#guide') return 'guide'
+    return 'landing'
+  })
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  const activeModule = useStore((s) => s.activeModule)
 
   useEffect(() => {
-    const onHash = () =>
-      setView(window.location.hash === '#app' ? 'app' : 'landing')
+    const onHash = () => {
+      const hash = window.location.hash
+      if (hash === '#app') setView('app')
+      else if (hash === '#validation') setView('validation')
+      else if (hash === '#guide') setView('guide')
+      else setView('landing')
+    }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
-  if (view === 'landing') return (
-    <>
-      <MobileOverlay />
-      <LandingPage />
-    </>
-  )
+  if (view === 'validation') return <ValidationPage />
+  if (view === 'guide') return <GuidePage />
+
+  if (view === 'landing') return <LandingPage />
 
   return (
     <div className="w-full h-screen flex flex-col bg-space-900 overflow-hidden">
       <MobileOverlay />
       <TopBar onSaveLoad={() => setSaveDialogOpen(true)} />
 
-      <div className="flex-1 flex overflow-hidden">
-        <LeftPanel>
-          <LeftPanelContent />
-        </LeftPanel>
+      {activeModule === ModuleId.MissionArchitect ? (
+        <MissionArchitectView />
+      ) : (
+        <>
+          <div className="flex-1 flex overflow-hidden">
+            <LeftPanel>
+              <LeftPanelContent />
+            </LeftPanel>
 
-        <CenterViewport />
+            <CenterViewport />
 
-        <RightPanel>
-          <RightPanelContent />
-        </RightPanel>
-      </div>
+            <RightPanel>
+              <RightPanelContent />
+            </RightPanel>
+          </div>
 
-      <BottomPanel>
-        <BottomPanelContent />
-      </BottomPanel>
+          <BottomPanel>
+            <BottomPanelContent />
+          </BottomPanel>
+        </>
+      )}
 
       <SaveLoadDialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)} />
     </div>

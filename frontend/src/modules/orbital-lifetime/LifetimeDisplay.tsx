@@ -3,9 +3,7 @@ import { useStore } from '@/stores'
 import DataReadout from '@/components/ui/DataReadout'
 import SectionHeader from '@/components/ui/SectionHeader'
 import {
-  estimateCrossSection,
   computeBallisticCoefficient,
-  simulateDecay,
   estimateLifetime,
   computeDeorbitDeltaV,
   type SolarActivity,
@@ -18,8 +16,9 @@ export default function LifetimeDisplay() {
   const [solarActivity] = useState<SolarActivity>('moderate')
 
   const avgAlt = elements.semiMajorAxis - 6378.137
-  const crossSection = estimateCrossSection(mission.spacecraft.size)
-  const bStar = computeBallisticCoefficient(mission.spacecraft.mass, crossSection)
+  const crossSection = mission.spacecraft.crossSectionArea
+  const cd = mission.spacecraft.dragCoefficient
+  const bStar = computeBallisticCoefficient(mission.spacecraft.mass, crossSection, cd)
 
   const lifetimeDays = useMemo(
     () => estimateLifetime(avgAlt, bStar, solarActivity),
@@ -43,18 +42,18 @@ export default function LifetimeDisplay() {
             unit="kg"
           />
           <DataReadout
-            label="CubeSat Size"
+            label="Bus Type"
             value={mission.spacecraft.size}
           />
           <DataReadout
             label="Cross-Section"
-            value={(crossSection * 1e4).toFixed(0)}
-            unit="cm&sup2;"
+            value={crossSection < 0.01 ? (crossSection * 1e4).toFixed(0) : crossSection.toFixed(3)}
+            unit={crossSection < 0.01 ? 'cm²' : 'm²'}
           />
           <DataReadout
             label="B* Coeff"
             value={bStar.toFixed(4)}
-            unit="m&sup2;/kg"
+            unit="m²/kg"
           />
         </div>
       </SectionHeader>
@@ -69,7 +68,7 @@ export default function LifetimeDisplay() {
           <DataReadout
             label="Density"
             value={density.toExponential(2)}
-            unit="kg/m&sup3;"
+            unit="kg/m³"
           />
         </div>
       </SectionHeader>
