@@ -7,6 +7,8 @@ import { computeEOAnalysis } from '@/lib/payload-eo'
 import { computeSARAnalysis } from '@/lib/payload-sar'
 import { computeSATCOMAnalysis } from '@/lib/payload-satcom'
 import { R_EARTH_EQUATORIAL } from '@/lib/constants'
+import EquationsPanel from '@/components/ui/EquationsPanel'
+import type { Equation } from '@/components/ui/EquationsPanel'
 
 export default function PayloadDisplay() {
   const payloadType = useStore((s) => s.payloadType)
@@ -39,6 +41,30 @@ export default function PayloadDisplay() {
       : null,
     [payloadType, satcom, shared, altKm],
   )
+
+  const eoEquations: Equation[] = eoAnalysis ? [
+    {
+      name: 'Ground Sample Distance',
+      formula: 'GSD = (pixel_size \u00D7 altitude) / focal_length',
+      computed: `GSD = (${eo.pixelSize} \u00B5m \u00D7 ${altKm.toFixed(1)} km) / ${eo.focalLength} mm = ${eoAnalysis.gsdNadir.toFixed(2)} m`,
+      variables: [
+        { symbol: 'pixel_size', definition: `${eo.pixelSize} \u00B5m` },
+        { symbol: 'focal_length', definition: `${eo.focalLength} mm` },
+      ],
+    },
+    {
+      name: 'Swath Width',
+      formula: 'Swath = 2 \u00D7 altitude \u00D7 tan(FOV/2)',
+      computed: `Swath = 2 \u00D7 ${altKm.toFixed(1)} km \u00D7 tan(${eoAnalysis.fovCrossTrack.toFixed(2)}\u00B0/2) = ${eoAnalysis.swathWidth.toFixed(1)} km`,
+      description: `FOV = ${eoAnalysis.fovCrossTrack.toFixed(2)}\u00B0 cross-track`,
+    },
+    {
+      name: 'Signal-to-Noise Ratio',
+      formula: 'SNR = (L \u00D7 \u03C1 \u00D7 \u03C4_atm \u00D7 \u03C0 \u00D7 D\u00B2 \u00D7 t_int \u00D7 QE) / (4 \u00D7 f#\u00B2 \u00D7 NEP)',
+      computed: `SNR = ${eoAnalysis.snr.toFixed(0)} (f/${eoAnalysis.fNumber.toFixed(1)}, D=${eo.apertureDia} mm)`,
+      description: 'Full radiometric chain from target radiance through optics to detector.',
+    },
+  ] : []
 
   return (
     <div className="space-y-3">
@@ -150,6 +176,8 @@ export default function PayloadDisplay() {
           </SectionHeader>
         </>
       )}
+
+      {eoAnalysis && <EquationsPanel equations={eoEquations} />}
     </div>
   )
 }

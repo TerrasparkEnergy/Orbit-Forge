@@ -5,6 +5,8 @@ import MetricCard from '@/components/ui/MetricCard'
 import SectionHeader from '@/components/ui/SectionHeader'
 import { computeRadiationEnvironment } from '@/lib/radiation'
 import { R_EARTH_EQUATORIAL } from '@/lib/constants'
+import EquationsPanel from '@/components/ui/EquationsPanel'
+import type { Equation } from '@/components/ui/EquationsPanel'
 
 export default function RadiationDisplay() {
   const elements = useStore((s) => s.elements)
@@ -18,6 +20,31 @@ export default function RadiationDisplay() {
     () => computeRadiationEnvironment(avgAlt, incDeg, shieldingMm, mission.lifetimeTarget),
     [avgAlt, incDeg, shieldingMm, mission.lifetimeTarget]
   )
+
+  const fmtDose = (v: number) => v < 0.1 ? v.toFixed(3) : v.toFixed(1)
+
+  const radiationEquations: Equation[] = [
+    {
+      name: 'Total Ionizing Dose',
+      formula: 'TID = annual_dose \u00D7 t_mission \u00D7 shielding_factor',
+      computed: `TID = ${fmtDose(rad.unshieldedDoseKradPerYear)} krad/yr \u00D7 ${mission.lifetimeTarget.toFixed(1)} yr \u00D7 ${rad.shieldingFactor.toFixed(3)} = ${fmtDose(rad.missionTotalDoseKrad)} krad`,
+      description: `At ${avgAlt.toFixed(0)} km, ${incDeg.toFixed(1)}\u00B0 inclination, ${shieldingMm.toFixed(1)} mm Al shielding.`,
+    },
+    {
+      name: 'AP-8 Trapped Proton Model',
+      formula: 'Trapped proton flux model for radiation belts',
+      computed: `At ${avgAlt.toFixed(0)} km, ${incDeg.toFixed(1)}\u00B0 inc \u2192 ${fmtDose(rad.unshieldedDoseKradPerYear)} krad/yr unshielded (incl. factor \u00D7${rad.inclinationFactor.toFixed(2)})`,
+      description: 'Peak flux in inner belt (1000\u20136000 km). Models proton environment as function of altitude and magnetic field coordinates.',
+    },
+    {
+      name: 'Shielding Attenuation',
+      formula: 'dose = dose_unshielded \u00D7 e^(-t / \u03BB)',
+      computed: `dose = ${fmtDose(rad.unshieldedDoseKradPerYear)} \u00D7 ${rad.shieldingFactor.toFixed(3)} = ${fmtDose(rad.shieldedDoseKradPerYear)} krad/yr (${shieldingMm.toFixed(1)} mm Al)`,
+      variables: [
+        { symbol: 't', definition: `${shieldingMm.toFixed(1)} mm Al` },
+      ],
+    },
+  ]
 
   const saaStatusColor: Record<string, 'nominal' | 'warning' | 'critical'> = {
     low: 'nominal',
@@ -119,6 +146,8 @@ export default function RadiationDisplay() {
           ))}
         </div>
       </SectionHeader>
+
+      <EquationsPanel equations={radiationEquations} />
     </div>
   )
 }

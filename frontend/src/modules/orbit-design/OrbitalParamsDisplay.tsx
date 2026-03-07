@@ -1,6 +1,8 @@
 import { useStore } from '@/stores'
 import { classifyOrbit } from '@/types/orbit'
-import { R_EARTH_EQUATORIAL, MU_EARTH_KM, getAtmosphericDensity } from '@/lib/constants'
+import { R_EARTH_EQUATORIAL, MU_EARTH_KM } from '@/lib/constants'
+import { getNrlmsiseDensity, SOLAR_PRESETS } from '@/lib/nrlmsise00'
+import type { SolarActivity } from '@/lib/orbital-lifetime'
 import {
   formatDistance,
   formatVelocity,
@@ -12,6 +14,8 @@ import {
 } from '@/lib/units'
 import DataReadout from '@/components/ui/DataReadout'
 import SectionHeader from '@/components/ui/SectionHeader'
+import EquationsPanel from '@/components/ui/EquationsPanel'
+import type { Equation } from '@/components/ui/EquationsPanel'
 import ExportCSVButton from '@/components/ui/ExportCSVButton'
 import { exportCSV } from '@/lib/csv-export'
 
@@ -20,6 +24,7 @@ export default function OrbitalParamsDisplay() {
   const elements = useStore((s) => s.elements)
   const propagationMode = useStore((s) => s.propagationMode)
   const osculatingElements = useStore((s) => s.osculatingElements)
+  const solarActivity = (useStore((s) => s.mission.solarActivity) || 'moderate') as SolarActivity
 
   if (!derivedParams) {
     return (
@@ -51,7 +56,48 @@ export default function OrbitalParamsDisplay() {
 
   const avgAlt = (periapsisAlt + apoapsisAlt) / 2
   const orbitType = classifyOrbit(avgAlt, ecc, displayElements.inclination, derivedParams.raanDrift)
-  const atmDensity = getAtmosphericDensity(periapsisAlt)
+  const solarPreset = SOLAR_PRESETS[solarActivity]
+  const atmDensity = getNrlmsiseDensity(periapsisAlt, 0, 0, new Date(), solarPreset.f107a, solarPreset.f107, solarPreset.ap)
+
+  const rPerigee = sma * (1 - ecc)
+  const orbitEquations: Equation[] = [
+    {
+      name: 'Orbital Velocity (Circular)',
+      formula: 'v = \u221A(\u03BC/r)',
+      computed: `v = \u221A(${MU_EARTH_KM.toFixed(2)} / ${rPerigee.toFixed(3)}) = ${vPerigee.toFixed(3)} km/s`,
+      variables: [
+        { symbol: '\u03BC', definition: `${MU_EARTH_KM.toFixed(4)} km\u00B3/s\u00B2` },
+        { symbol: 'r', definition: `${R_EARTH_EQUATORIAL.toFixed(3)} + ${periapsisAlt.toFixed(1)} = ${rPerigee.toFixed(3)} km` },
+      ],
+    },
+    {
+      name: 'Orbital Period',
+      formula: 'T = 2\u03C0\u221A(a\u00B3/\u03BC)',
+      computed: `T = 2\u03C0\u221A(${sma.toFixed(3)}\u00B3 / ${MU_EARTH_KM.toFixed(2)}) = ${(period / 60).toFixed(2)} min`,
+      variables: [
+        { symbol: 'a', definition: `${sma.toFixed(3)} km` },
+      ],
+    },
+    {
+      name: 'J2 RAAN Drift',
+      formula: 'd\u03A9/dt = -3/2 \u00D7 n \u00D7 J\u2082 \u00D7 (R\u2091/a)\u00B2 \u00D7 cos(i) / (1-e\u00B2)\u00B2',
+      computed: `d\u03A9/dt = ${derivedParams.raanDrift.toFixed(4)}\u00B0/day  (i=${displayElements.inclination.toFixed(2)}\u00B0, e=${ecc.toFixed(6)})`,
+      variables: [
+        { symbol: 'J\u2082', definition: '1.08263\u00D710\u207B\u00B3' },
+      ],
+    },
+    {
+      name: 'J2 Arg. Perigee Drift',
+      formula: 'd\u03C9/dt = 3/2 \u00D7 n \u00D7 J\u2082 \u00D7 (R\u2091/a)\u00B2 \u00D7 (2 - 5/2 \u00D7 sin\u00B2(i)) / (1-e\u00B2)\u00B2',
+      computed: `d\u03C9/dt = ${derivedParams.argPerigeeDrift.toFixed(4)}\u00B0/day`,
+    },
+    {
+      name: 'Sun-Synchronous Condition',
+      formula: 'd\u03A9/dt = 0.9856\u00B0/day',
+      computed: `Actual d\u03A9/dt = ${derivedParams.raanDrift.toFixed(4)}\u00B0/day \u2014 ${derivedParams.isSunSync ? 'SUN-SYNC \u2713' : 'Not sun-synchronous'}`,
+      description: 'Solve RAAN drift equation for inclination at a given altitude to achieve sun-synchronous precession matching Earth\u2019s orbital rate.',
+    },
+  ]
 
   return (
     <div className="space-y-3">
@@ -174,6 +220,8 @@ export default function OrbitalParamsDisplay() {
           <DataReadout label="True Anomaly" value={formatAngle(displayElements.trueAnomaly)} />
         </div>
       </SectionHeader>
+
+      <EquationsPanel equations={orbitEquations} />
     </div>
   )
 }
